@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/render.js && node --check src/analysis-worker.js && node --check src/constants.js && node --check src/dsp.js && node --check src/format.js && node --check src/palette.js && node --check src/export.js && node --check src/fixtures.js && node --check src/memory.js && node --check src/readout.js && node --check src/smoke.js && node --check src/spectrogram-image.js && node --check src/settings-store.js && node --check src/decoders/index.js && node --check src/decoders/browser-decoder.js && node --check src/decoders/ffmpeg-decoder.js && node --check src/decoders/sample-rate-sniffer.js && node --check scripts/download-codec-samples.mjs",
+    "check": "node --check src/main.js && node --check src/render.js && node --check src/render-bitmap-worker.js && node --check src/analysis-worker.js && node --check src/constants.js && node --check src/dsp.js && node --check src/format.js && node --check src/palette.js && node --check src/export.js && node --check src/fixtures.js && node --check src/memory.js && node --check src/readout.js && node --check src/smoke.js && node --check src/spectrogram-image.js && node --check src/settings-store.js && node --check src/decoders/index.js && node --check src/decoders/browser-decoder.js && node --check src/decoders/ffmpeg-decoder.js && node --check src/decoders/sample-rate-sniffer.js && node --check scripts/download-codec-samples.mjs",
     "fixtures:codec": "node scripts/download-codec-samples.mjs"
   }
 }

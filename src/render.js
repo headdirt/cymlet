@@ -4,6 +4,8 @@ import { formatTimeMmSs } from "./format.js";
 import { spectrogramImageData } from "./spectrogram-image.js";
 
 let bitmapCanvas = null;
+let spectrogramBitmapCache = null;
+let paletteImageCache = null;
 
 export function spectrogramPlot(width, height) {
   return {
@@ -29,16 +31,13 @@ export function drawSpectrogram(ctx, options) {
     palette,
     fileName,
     meta,
+    bitmap: bitmapOverride,
   } = options;
 
   const plot = spectrogramPlot(width, height);
   const plotW = plot.width;
   const plotH = plot.height;
-  const imageData = new ImageData(spectrogramImageData({ matrix, columns, bands, minDb, maxDb, palette }), columns, bands);
-
-  const bitmap = getBitmapCanvas(columns, bands);
-  const bitmapCtx = bitmap.getContext("2d");
-  bitmapCtx.putImageData(imageData, 0, 0);
+  const bitmap = bitmapOverride || cachedSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette });
 
   ctx.fillStyle = "#020306";
   ctx.fillRect(0, 0, width, height);
@@ -88,6 +87,48 @@ function formatFrequencyTick(frequency) {
 }
 
 function drawPalette(ctx, x, y, width, height, minDb, maxDb, palette) {
+  const imageData = cachedPaletteImageData(width, height, palette);
+  ctx.putImageData(imageData, x, y);
+  ctx.strokeStyle = "#f4f6fb";
+  ctx.strokeRect(x, y, width, height);
+  const values = niceDbTicks(minDb, maxDb);
+  for (const value of values) {
+    const py = y + height - ((value - minDb) / (maxDb - minDb)) * height;
+    drawTick(ctx, x + width, py, `${value} dB`, "right");
+  }
+}
+
+function cachedSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette }) {
+  if (
+    spectrogramBitmapCache &&
+    spectrogramBitmapCache.matrix === matrix &&
+    spectrogramBitmapCache.columns === columns &&
+    spectrogramBitmapCache.bands === bands &&
+    spectrogramBitmapCache.minDb === minDb &&
+    spectrogramBitmapCache.maxDb === maxDb &&
+    spectrogramBitmapCache.palette === palette
+  ) {
+    return spectrogramBitmapCache.bitmap;
+  }
+
+  const imageData = new ImageData(spectrogramImageData({ matrix, columns, bands, minDb, maxDb, palette }), columns, bands);
+  const bitmap = getBitmapCanvas(columns, bands);
+  const bitmapCtx = bitmap.getContext("2d");
+  bitmapCtx.putImageData(imageData, 0, 0);
+  spectrogramBitmapCache = { matrix, columns, bands, minDb, maxDb, palette, bitmap };
+  return bitmap;
+}
+
+function cachedPaletteImageData(width, height, palette) {
+  if (
+    paletteImageCache &&
+    paletteImageCache.width === width &&
+    paletteImageCache.height === height &&
+    paletteImageCache.palette === palette
+  ) {
+    return paletteImageCache.imageData;
+  }
+
   const imageData = new ImageData(width, height);
   for (let row = 0; row < height; row++) {
     const level = 1 - row / Math.max(1, height - 1);
@@ -100,14 +141,8 @@ function drawPalette(ctx, x, y, width, height, minDb, maxDb, palette) {
       imageData.data[i + 3] = 255;
     }
   }
-  ctx.putImageData(imageData, x, y);
-  ctx.strokeStyle = "#f4f6fb";
-  ctx.strokeRect(x, y, width, height);
-  const values = niceDbTicks(minDb, maxDb);
-  for (const value of values) {
-    const py = y + height - ((value - minDb) / (maxDb - minDb)) * height;
-    drawTick(ctx, x + width, py, `${value} dB`, "right");
-  }
+  paletteImageCache = { width, height, palette, imageData };
+  return imageData;
 }
 
 function getBitmapCanvas(width, height) {

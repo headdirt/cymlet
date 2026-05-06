@@ -33,6 +33,7 @@ export function fromAudioBuffer(audioBuffer, metadata = {}) {
     streamCount: metadata.streamCount || 1,
     streamLabel: metadata.streamLabel || "Browser decoded stream",
     codecName: metadata.codecName || "",
+    codecLongName: metadata.codecLongName || metadata.codecName || "",
     bitRate: metadata.bitRate || 0,
     bitsPerSample: metadata.bitsPerSample || 0,
     streams: metadata.streams || [],

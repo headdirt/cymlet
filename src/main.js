@@ -52,6 +52,13 @@ const state = {
   analysisId: 0,
   worker: null,
   workerBusy: false,
+  renderWorker: null,
+  renderVersion: 0,
+  renderRequestId: 0,
+  renderBitmap: null,
+  renderBitmapKey: "",
+  renderBitmapPendingKey: "",
+  renderBitmapVersion: 0,
 };
 
 const ctx = els.canvas.getContext("2d", { alpha: false });
@@ -93,6 +100,20 @@ function setProgress(value) {
   els.progressBar.style.width = `${Math.max(0, Math.min(1, value)) * 100}%`;
 }
 
+function setWorkspaceHasFile(hasFile) {
+  els.emptyState.classList.toggle("hidden", hasFile);
+  els.dropZone.classList.toggle("hasFile", hasFile);
+  if (hasFile) {
+    els.dropZone.removeAttribute("role");
+    els.dropZone.tabIndex = -1;
+    els.dropZone.setAttribute("aria-label", "Spectrogram workspace");
+  } else {
+    els.dropZone.setAttribute("role", "button");
+    els.dropZone.tabIndex = 0;
+    els.dropZone.setAttribute("aria-label", "Open or drop an audio file");
+  }
+}
+
 function resizeCanvas() {
   const rect = els.canvas.getBoundingClientRect();
   const dpr = Math.max(1, Math.min(CANVAS_MAX_DPR, window.devicePixelRatio || 1));
@@ -120,7 +141,7 @@ async function openFile(file, overrides = {}) {
   state.streamIndex = Number(overrides.streamIndex || 0);
   state.analysisId++;
   state.matrix = null;
-  els.emptyState.classList.add("hidden");
+  setWorkspaceHasFile(true);
   els.exportButton.disabled = true;
   setProgress(0);
   const s = settings();
@@ -150,7 +171,7 @@ async function openFile(file, overrides = {}) {
     state.audioBuffer = null;
     state.matrix = null;
     els.fileMeta.textContent = file.name;
-    els.emptyState.classList.remove("hidden");
+    setWorkspaceHasFile(false);
     setStatus(`Could not decode this file. ${error.message || error}`);
     render();
   }
@@ -180,15 +201,48 @@ function populateChannels(count) {
 }
 
 function metaText() {
+  return [fileTitleText(), detailText()].filter(Boolean).join(" · ");
+}
+
+function fileTitleText() {
   if (!state.audioBuffer) return "Open an audio file to begin.";
+  return state.fileName;
+}
+
+function detailText() {
+  if (!state.audioBuffer) return "";
   const s = settings();
   const duration = formatTimeMmSs(state.audioBuffer.duration);
-  const channels = state.audioBuffer.channelCount;
   const sourceRate = state.audioBuffer.sourceSampleRate && state.audioBuffer.sourceSampleRate !== state.audioBuffer.sampleRate
     ? `src ${state.audioBuffer.sourceSampleRate} Hz, decoded ${state.audioBuffer.sampleRate} Hz`
     : `${state.audioBuffer.sampleRate} Hz`;
-  const codec = state.audioBuffer.codecName ? ` · ${state.audioBuffer.codecName}` : "";
-  return `${state.fileName} · ${state.audioBuffer.backend}${codec} · ${duration} · ${sourceRate} · ${channels} channel${channels === 1 ? "" : "s"} · W:${s.fftSize} · ${labelWindow(s.windowFunction)}`;
+  const stream = `Stream ${state.audioBuffer.streamIndex + 1} / ${state.audioBuffer.streamCount || 1}`;
+  const codec = codecText(state.audioBuffer);
+  const bits = state.audioBuffer.bitsPerSample ? `${state.audioBuffer.bitsPerSample} bits` : "";
+  const channel = channelText();
+  return [
+    stream,
+    codec,
+    duration,
+    sourceRate,
+    bits,
+    channel,
+    `W:${s.fftSize}`,
+    labelWindow(s.windowFunction),
+  ].filter(Boolean).join(" · ");
+}
+
+function codecText(audio) {
+  if (audio.codecLongName) return audio.codecLongName;
+  if (audio.codecName) return audio.codecName.toUpperCase();
+  return audio.backend === "ffmpeg" ? "FFmpeg-decoded audio" : "Browser-decoded audio";
+}
+
+function channelText() {
+  if (!state.audioBuffer) return "";
+  const channels = state.audioBuffer.channelCount;
+  const selected = Math.min(settings().channel, Math.max(0, channels - 1));
+  return channels === 1 ? "Mono" : `Channel ${selected + 1} / ${channels}`;
 }
 
 function analyze() {
@@ -255,6 +309,9 @@ function handleWorkerMessage(event) {
     state.matrix = new Float32Array(message.matrix);
     state.bands = message.bands;
     state.columns = message.columns;
+    state.renderVersion++;
+    clearRenderBitmap();
+    prepareRenderWorkerMatrix();
     setProgress(1);
     setStatus("Analysis complete.");
     els.exportButton.disabled = false;
@@ -266,13 +323,27 @@ function handleWorkerMessage(event) {
   }
 }
 
-function render() {
+function render({ forceSync = false } = {}) {
   resizeCanvas();
   const s = settings();
   ctx.fillStyle = "#020306";
   ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
   if (!state.matrix || !state.audioBuffer) return;
-  drawSpectrogram(ctx, {
+  const options = spectrogramRenderOptions(s);
+  const key = renderBitmapKey(s);
+  if (!forceSync && state.renderBitmap && state.renderBitmapVersion === state.renderVersion && state.renderBitmapKey === key) {
+    drawSpectrogram(ctx, { ...options, bitmap: state.renderBitmap });
+    return;
+  }
+  if (!forceSync && requestRenderWorkerBitmap(s, key)) {
+    setStatus("Rendering...");
+    return;
+  }
+  drawSpectrogram(ctx, options);
+}
+
+function spectrogramRenderOptions(s) {
+  return {
     width: els.canvas.width,
     height: els.canvas.height,
     matrix: state.matrix,
@@ -284,9 +355,13 @@ function render() {
     minDb: s.minDb,
     maxDb: s.maxDb,
     palette: currentPalette(s.palette),
-    fileName: state.fileName,
-    meta: metaText(),
-  });
+    fileName: fileTitleText(),
+    meta: detailText(),
+  };
+}
+
+function renderBitmapKey(s) {
+  return `${state.renderVersion}:${s.minDb}:${s.maxDb}:${s.palette}`;
 }
 
 function currentPalette(name) {
@@ -297,12 +372,93 @@ function currentPalette(name) {
   return renderedPalette;
 }
 
+function clearRenderBitmap() {
+  if (state.renderBitmap && typeof state.renderBitmap.close === "function") state.renderBitmap.close();
+  state.renderBitmap = null;
+  state.renderBitmapKey = "";
+  state.renderBitmapPendingKey = "";
+  state.renderBitmapVersion = 0;
+}
+
+function canUseRenderWorker() {
+  return (
+    typeof Worker === "function" &&
+    typeof OffscreenCanvas === "function" &&
+    typeof OffscreenCanvas.prototype.transferToImageBitmap === "function"
+  );
+}
+
+function ensureRenderWorker() {
+  if (!canUseRenderWorker()) return null;
+  if (!state.renderWorker) {
+    state.renderWorker = new Worker("./src/render-bitmap-worker.js", { type: "module" });
+    state.renderWorker.onmessage = handleRenderWorkerMessage;
+    state.renderWorker.onerror = () => {
+      state.renderWorker?.terminate();
+      state.renderWorker = null;
+      state.renderBitmapPendingKey = "";
+      if (state.matrix && state.audioBuffer) render({ forceSync: true });
+    };
+  }
+  return state.renderWorker;
+}
+
+function prepareRenderWorkerMatrix() {
+  const worker = ensureRenderWorker();
+  if (!worker || !state.matrix) return;
+  const matrixCopy = new Float32Array(state.matrix);
+  worker.postMessage({
+    type: "set-matrix",
+    version: state.renderVersion,
+    matrix: matrixCopy.buffer,
+    columns: state.columns,
+    bands: state.bands,
+  }, [matrixCopy.buffer]);
+}
+
+function requestRenderWorkerBitmap(s, key) {
+  const worker = ensureRenderWorker();
+  if (!worker || !state.matrix) return false;
+  if (state.renderBitmapPendingKey === key) return true;
+  const palette = new Uint8ClampedArray(currentPalette(s.palette));
+  worker.postMessage({
+    type: "render",
+    id: ++state.renderRequestId,
+    key,
+    minDb: s.minDb,
+    maxDb: s.maxDb,
+    palette: palette.buffer,
+  }, [palette.buffer]);
+  state.renderBitmapPendingKey = key;
+  return true;
+}
+
+function handleRenderWorkerMessage(event) {
+  const message = event.data;
+  if (
+    message.type !== "bitmap" ||
+    message.id !== state.renderRequestId ||
+    message.version !== state.renderVersion ||
+    message.key !== state.renderBitmapPendingKey
+  ) {
+    if (message.bitmap && typeof message.bitmap.close === "function") message.bitmap.close();
+    return;
+  }
+  clearRenderBitmap();
+  state.renderBitmap = message.bitmap;
+  state.renderBitmapKey = message.key;
+  state.renderBitmapPendingKey = "";
+  state.renderBitmapVersion = message.version;
+  render();
+  setStatus("Analysis complete.");
+}
+
 function displayNyquist(audio) {
   return ((audio.sourceSampleRate || audio.sampleRate) / 2);
 }
 
 function exportPng() {
-  render();
+  render({ forceSync: true });
   downloadCanvasPng(els.canvas, state.fileName);
 }
 
@@ -428,11 +584,13 @@ els.dropZone.addEventListener("drop", (event) => {
 });
 
 els.dropZone.addEventListener("click", () => {
+  if (els.dropZone.classList.contains("hasFile")) return;
   openFilePicker();
 });
 
 els.dropZone.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
+  if (els.dropZone.classList.contains("hasFile")) return;
   event.preventDefault();
   openFilePicker();
 });
@@ -493,7 +651,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     fixtureMeta.decodedBytes = decodedByteSize(fixtureMeta);
     state.audioBuffer = fixtureMeta;
     state.fileName = "synthetic-sweep.wav";
-    els.emptyState.classList.add("hidden");
+    setWorkspaceHasFile(true);
     populateStreams(fixtureMeta);
     populateChannels(fixtureMeta.channelCount);
     els.fileMeta.textContent = metaText();

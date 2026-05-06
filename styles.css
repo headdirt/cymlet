@@ -98,7 +98,14 @@ button:disabled {
   border-radius: 8px;
   overflow: hidden;
   background: #020306;
+}
+
+.workspace:not(.hasFile) {
   cursor: pointer;
+}
+
+.workspace.hasFile {
+  cursor: crosshair;
 }
 
 .workspace.dragging {
@@ -195,6 +202,23 @@ button:disabled {
   color: #a8b0c2;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.controlFooter {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid #202638;
+}
+
+.repoLink {
+  color: #7f889a;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.repoLink:hover {
+  color: #f4f6fb;
+  text-decoration: underline;
 }
 
 @media (max-width: 880px) {

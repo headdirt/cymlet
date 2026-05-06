@@ -43,6 +43,7 @@ export async function decodeWithFfmpeg(file, options = {}) {
       fileName: file.name,
       inputBytes: file.size || inputData.byteLength,
       codecName: stream?.codecName || "",
+      codecLongName: stream?.codecLongName || stream?.codecName || "",
       bitRate: stream?.bitRate || 0,
       bitsPerSample: stream?.bitsPerSample || 0,
       sourceSampleRate: stream?.sampleRate || decoded.sourceSampleRate,

@@ -54,6 +54,7 @@ test("fromAudioBuffer exposes normalized decoded audio metadata", () => {
   assert.equal(decoded.channelCount, 2);
   assert.equal(decoded.streamCount, 1);
   assert.equal(decoded.decodedBytes, 3 * 2 * Float32Array.BYTES_PER_ELEMENT);
+  assert.equal(decoded.codecLongName, "");
   assert.equal(decoded.getChannelData(1)[2], -0.5);
 });
 
@@ -239,6 +240,7 @@ test("FFmpeg decoder lazily transcodes to WAV and reuses browser decode shape", 
   assert.equal(decoded.streamIndex, 1);
   assert.equal(decoded.streamCount, 2);
   assert.equal(decoded.codecName, "aac");
+  assert.equal(decoded.codecLongName, "AAC");
   assert.equal(decoded.sourceSampleRate, 48000);
   assert.match(decoded.streamLabel, /Stream 2 \/ 2/);
   assert.deepEqual(calls[0], ["writeFile", "song.flac", 4]);
