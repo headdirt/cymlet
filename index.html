@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cymlet</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Cymlet</h1>
+          <p id="fileMeta">Open an audio file to begin.</p>
+        </div>
+        <div class="actions">
+          <label class="fileButton">
+            <input id="fileInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac">
+            Open
+          </label>
+          <button id="exportButton" type="button" disabled>Export PNG</button>
+        </div>
+      </header>
+
+      <section id="dropZone" class="workspace" aria-label="Spectrogram workspace">
+        <canvas id="spectrogramCanvas" width="1200" height="720"></canvas>
+        <div id="emptyState" class="emptyState">
+          <strong>Drop audio here</strong>
+          <span>WAV, MP3, M4A/AAC, and Ogg support depends on your browser.</span>
+        </div>
+      </section>
+
+      <aside class="controls" aria-label="Spectrogram controls">
+        <label>
+          Decoder
+          <select id="decoderModeSelect">
+            <option value="browser" selected>Browser</option>
+            <option value="ffmpeg">FFmpeg</option>
+          </select>
+        </label>
+        <label>
+          Stream
+          <select id="streamSelect" disabled>
+            <option value="0">Browser decoded stream</option>
+          </select>
+        </label>
+        <label>
+          Channel
+          <select id="channelSelect" disabled></select>
+        </label>
+        <label>
+          Palette
+          <select id="paletteSelect">
+            <option value="sox">SoX</option>
+            <option value="spectrum">Spectrum</option>
+            <option value="mono">Mono</option>
+          </select>
+        </label>
+        <label>
+          FFT Size
+          <select id="fftSizeSelect">
+            <option value="256">256</option>
+            <option value="512">512</option>
+            <option value="1024">1024</option>
+            <option value="2048" selected>2048</option>
+            <option value="4096">4096</option>
+            <option value="8192">8192</option>
+            <option value="16384">16384</option>
+          </select>
+        </label>
+        <label>
+          Window
+          <select id="windowSelect">
+            <option value="hann" selected>Hann</option>
+            <option value="hamming">Hamming</option>
+            <option value="blackmanHarris">Blackman-Harris</option>
+          </select>
+        </label>
+        <label>
+          Lower dB
+          <input id="minDbInput" type="number" min="-140" max="-1" step="1" value="-120">
+        </label>
+        <label>
+          Upper dB
+          <input id="maxDbInput" type="number" min="-139" max="0" step="1" value="0">
+        </label>
+        <div class="progress">
+          <div id="progressBar"></div>
+        </div>
+        <p id="statusText" class="status">Ready.</p>
+      </aside>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

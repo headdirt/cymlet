@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cymlet">
+  <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+  <rect width="64" height="64" rx="12" fill="#05070d"/>
+  <path d="M10 46V18h44v28z" fill="#0f1420" stroke="#d9deea" stroke-width="2"/>
+  <path d="M12 43h40v3H12z" fill="#ffffff"/>
+  <path d="M12 38h40v5H12z" fill="#ffcc33"/>
+  <path d="M12 31h40v7H12z" fill="#1fd181"/>
+  <path d="M12 23h40v8H12z" fill="#1d7cff"/>
+  <path d="M12 18h40v5H12z" fill="#05070d"/>
+  <path d="M18 46V19M28 46V19M39 46V19M49 46V19" stroke="#05070d" stroke-opacity=".42" stroke-width="2"/>
+</svg>
