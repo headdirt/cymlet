@@ -36,7 +36,10 @@
         <div class="controlField">
           <span class="labelRow">
             <label for="decoderModeSelect" class="controlLabel">Decoder</label>
-            <button id="decoderHelpButton" class="helpButton" type="button" aria-describedby="decoderHelp" aria-expanded="false">?</button>
+            <button id="decoderHelpButton" class="helpButton" type="button" aria-label="Decoder notes" aria-describedby="decoderHelp" aria-expanded="false">
+              <span class="helpIcon" aria-hidden="true">i</span>
+              <span class="helpText">Info</span>
+            </button>
             <span id="decoderHelp" class="tooltip" role="tooltip">
               Browser mode is fastest for WAV, MP3, AAC/M4A, Ogg Vorbis, and FLAC files. Safari also supports ALAC/M4A and AC-3. Use FFmpeg for APE, WavPack, Musepack, WMA, DTS, and audio with very high sample rates where browser decoding resamples the audio.
             </span>

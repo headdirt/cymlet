@@ -185,14 +185,24 @@ button:disabled {
 .helpButton {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  min-height: 18px;
-  height: 18px;
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
   border-radius: 999px;
   padding: 0;
   color: #aeb7ca;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
+}
+
+.helpIcon {
+  font-weight: 700;
+  font-family: ui-serif, Georgia, serif;
+  font-style: italic;
+}
+
+.helpText {
+  display: none;
 }
 
 .helpButton:hover,
@@ -291,8 +301,8 @@ button:disabled {
     flex-wrap: wrap;
   }
 
-  .fileButton,
-  button {
+  .actions .fileButton,
+  .actions button {
     flex: 1;
     text-align: center;
   }
@@ -328,8 +338,26 @@ button:disabled {
     padding: 12px;
   }
 
-  .controls label {
+  .controls label,
+  .controlField {
     gap: 5px;
+  }
+
+  .helpButton {
+    display: inline-flex;
+    width: auto;
+    min-height: 28px;
+    height: 28px;
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .helpText {
+    display: inline;
+    font-family: inherit;
+    font-style: normal;
+    font-weight: 600;
   }
 }
 
@@ -339,8 +367,8 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .fileButton,
-  button {
+  .actions .fileButton,
+  .actions button {
     width: 100%;
   }
 

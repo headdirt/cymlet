@@ -65,6 +65,11 @@ export const COMPATIBILITY_EXTENSIONS = [
   "wmv",
 ];
 
+export const SUPPORTED_AUDIO_EXTENSIONS = [
+  ...BROWSER_EXTENSIONS,
+  ...COMPATIBILITY_EXTENSIONS,
+];
+
 export const AUDIO_MIME_TYPES = [
   "audio/wav",
   "audio/x-wav",
@@ -82,8 +87,7 @@ export const AUDIO_MIME_TYPES = [
 ];
 
 export const FILE_ACCEPT_TYPES = [
-  ...BROWSER_EXTENSIONS.map((extension) => `.${extension}`),
-  ...COMPATIBILITY_EXTENSIONS.map((extension) => `.${extension}`),
+  ...SUPPORTED_AUDIO_EXTENSIONS.map((extension) => `.${extension}`),
   ...AUDIO_MIME_TYPES,
 ];
 

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { COMPATIBILITY_EXTENSIONS, FILE_ACCEPT_TYPES } from "../src/constants.js";
+import { BROWSER_EXTENSIONS, COMPATIBILITY_EXTENSIONS, FILE_ACCEPT_TYPES, SUPPORTED_AUDIO_EXTENSIONS } from "../src/constants.js";
 import { shouldOfferCompatibilityDecoder } from "../src/decoders/index.js";
 import { CODEC_SAMPLES, codecSampleUrl, codecSamplesByMode, codecSamplesForReleaseBrowserSuite } from "./codec-samples.js";
 
@@ -31,6 +31,13 @@ test("file picker accepts advertised compatibility extensions without broad medi
   for (const extension of COMPATIBILITY_EXTENSIONS) {
     assert.equal(FILE_ACCEPT_TYPES.includes(`.${extension}`), true, extension);
   }
+});
+
+test("supported audio extensions match browser and compatibility extension sets", () => {
+  assert.deepEqual(SUPPORTED_AUDIO_EXTENSIONS, [
+    ...BROWSER_EXTENSIONS,
+    ...COMPATIBILITY_EXTENSIONS,
+  ]);
 });
 
 test("browser sample manifest keeps clear native formats off the compatibility path", () => {

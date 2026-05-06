@@ -13,6 +13,7 @@ import {
   SPECTROGRAM_MIN_COLUMNS,
   SPECTROGRAM_NON_PLOT_WIDTH,
   STATUS,
+  SUPPORTED_AUDIO_EXTENSIONS,
   SYNTHETIC_SAMPLE_RATE,
   TESTED_SAFARI_EXTRA_FORMATS,
   TESTED_WEB_AUDIO_FORMATS,
@@ -127,6 +128,17 @@ function setWorkspaceHasFile(hasFile) {
   }
 }
 
+function clearLoadedAudio({ fileMetaText, statusText }) {
+  state.audioBuffer = null;
+  state.matrix = null;
+  els.exportButton.disabled = true;
+  els.fileMeta.textContent = fileMetaText;
+  setWorkspaceHasFile(false);
+  setProgress(0);
+  setStatus(statusText);
+  render();
+}
+
 function resizeCanvas() {
   const rect = els.canvas.getBoundingClientRect();
   const dpr = Math.max(1, Math.min(CANVAS_MAX_DPR, window.devicePixelRatio || 1));
@@ -147,9 +159,28 @@ function targetColumns() {
   return capColumnsForMatrixBudget(requested, settings().fftSize);
 }
 
+function isClearlyUnsupportedFile(file) {
+  const type = String(file.type || "").toLowerCase();
+  if (type.startsWith("video/") || type.startsWith("image/")) return true;
+  if (type.startsWith("audio/")) return false;
+  const name = String(file.name || "").toLowerCase();
+  if (!/\.[a-z0-9]+$/i.test(name)) return false;
+  return !SUPPORTED_AUDIO_EXTENSIONS.some((extension) => name.endsWith(`.${extension}`));
+}
+
 async function openFile(file, overrides = {}) {
   if (!file) return;
   const openId = ++state.openId;
+  if (isClearlyUnsupportedFile(file)) {
+    state.currentFile = null;
+    state.fileName = "";
+    state.analysisId++;
+    clearLoadedAudio({
+      fileMetaText: "Open an audio file to begin.",
+      statusText: "Unsupported file. Choose an audio file in a supported format.",
+    });
+    return;
+  }
   state.currentFile = file;
   state.streamIndex = Number(overrides.streamIndex || 0);
   state.analysisId++;
@@ -181,12 +212,10 @@ async function openFile(file, overrides = {}) {
     analyze();
   } catch (error) {
     if (openId !== state.openId) return;
-    state.audioBuffer = null;
-    state.matrix = null;
-    els.fileMeta.textContent = file.name;
-    setWorkspaceHasFile(false);
-    setStatus(`Could not decode this file. ${error.message || error}`);
-    render();
+    clearLoadedAudio({
+      fileMetaText: file.name,
+      statusText: `Could not decode this file. ${error.message || error}`,
+    });
   }
 }
 
