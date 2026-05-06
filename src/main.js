@@ -342,8 +342,8 @@ function updateFfmpegProgress(event) {
 function updateNativeSupportText() {
   const supported = nativeAudioSupport();
   els.nativeSupport.textContent = supported.length
-    ? `Native here: ${supported.join(", ")}. Use FFmpeg for the rest.`
-    : "Native support could not be detected. FFmpeg is available for broader formats.";
+    ? `Browser mode is fastest for most files. This browser reports native ${supported.join(", ")} support.`
+    : "Browser mode is fastest for most files. FFmpeg is available for formats this browser cannot decode.";
 }
 
 function nativeAudioSupport() {

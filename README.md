@@ -103,8 +103,8 @@ The current vendored bundle is `@ffmpeg/ffmpeg@0.12.15` plus single-thread `@ffm
 
 Cymlet has two visible decoder modes:
 
-- Browser: default, fast startup, native Web Audio decode first, with a consent prompt before loading the optional FFmpeg bundle after likely compatibility-format failures.
-- FFmpeg: lazy FFmpeg WASM path selected directly for formats the browser cannot decode.
+- Browser first: default, fast startup, native Web Audio decode first, with a consent prompt before loading the optional FFmpeg bundle after likely compatibility-format failures.
+- FFmpeg for more formats: lazy FFmpeg WASM path selected directly for formats the browser cannot decode.
 
 The Browser decoder uses Web Audio `decodeAudioData`. It is available in current Chromium, Firefox, and Safari, but supported audio formats vary by browser and OS.
 
