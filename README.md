@@ -106,16 +106,21 @@ Cymlet has two visible decoder modes:
 - Browser first: default, fast startup, native Web Audio decode first, with a consent prompt before loading the optional FFmpeg bundle after likely compatibility-format failures.
 - FFmpeg for more formats: lazy FFmpeg WASM path selected directly for formats the browser cannot decode.
 
-The Browser decoder uses Web Audio `decodeAudioData`. It is available in current Chromium, Firefox, and Safari, but supported audio formats vary by browser and OS.
+The Browser decoder uses Web Audio `decodeAudioData`. It is available in current Chromium, Firefox, and Safari, but supported audio formats vary by browser, OS, container, and codec.
 
-Expected common Browser-mode support:
+Measured Browser-mode support from the local fixture matrix on Safari 26.4, Firefox 150, and Helium/Chromium 148:
 
 | Format | Expected Path | Notes |
 | --- | --- | --- |
-| WAV PCM | Browser | Best native fixture format. |
-| MP3 | Browser | Broad support. |
-| M4A/AAC | Browser | Broad support for AAC; M4A can also contain ALAC. |
-| Ogg/Vorbis | Browser | Common in Chromium/Firefox; Safari support can vary. |
+| WAV PCM | Browser | Supported in all three tested browsers. |
+| MP3 | Browser | Supported in all three tested browsers. |
+| M4A/AAC | Browser | Supported in all three tested browsers. |
+| Ogg/Vorbis | Browser | Supported in all three tested browsers. |
+| FLAC | Browser | Supported in all three tested browsers, though high-rate files may decode at the browser context rate. |
+| ALAC/M4A | Browser on Safari, FFmpeg elsewhere | Safari decoded the ALAC fixture; Firefox and Helium/Chromium did not. |
+| AC-3 | Browser on Safari, FFmpeg elsewhere | Safari decoded the AC-3 fixture; Firefox and Helium/Chromium did not. |
+
+The app also reads `HTMLAudioElement.canPlayType()` at runtime and surfaces additional reported native support as a hint. Treat that as browser-advertised support, not proof that every codec inside that container will decode through Web Audio.
 
 Important Browser decoder limitations:
 
@@ -128,16 +133,16 @@ The Browser decoder sniffs WAV, MP3, FLAC, and Ogg Vorbis source sample rates be
 
 FFmpeg mode is gated behind a dynamic import and only loads when explicitly selected or accepted after browser decode failure in Browser mode.
 
-Expected FFmpeg-mode cases:
+Measured FFmpeg-mode cases:
 
 | Format | Expected Path | Notes |
 | --- | --- | --- |
-| FLAC | FFmpeg | Some browsers support FLAC, but FFmpeg gives more consistent metadata/parity. |
-| ALAC/M4A | FFmpeg | ALAC-in-M4A is not a reliable native browser target. |
+| FLAC | Browser or FFmpeg | Browsers decoded the tested fixtures; FFmpeg preserved source rates and provides metadata. |
+| ALAC/M4A | Safari browser or FFmpeg | ALAC-in-M4A is not a reliable cross-browser native target. |
 | APE | FFmpeg | External fixture coverage target. |
 | WavPack | FFmpeg | External fixture coverage target. |
 | WMA | FFmpeg | External fixture coverage target. |
-| AC3/DTS | FFmpeg | External fixture coverage target. |
+| AC-3/DTS | Safari browser for AC-3, FFmpeg for both | DTS required FFmpeg in all tested browsers. |
 | Musepack | FFmpeg | External fixture coverage target. |
 
 Threaded FFmpeg builds may require cross-origin isolation headers. The current integration uses an unthreaded bundle so ordinary static servers stay simple.

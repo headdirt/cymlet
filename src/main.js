@@ -3,16 +3,26 @@ import {
   CANVAS_MAX_DPR,
   CANVAS_MIN_HEIGHT,
   CANVAS_MIN_WIDTH,
+  DECODER_AUDIO_LABELS,
+  DECODER_STREAM_LABELS,
+  FILE_ACCEPT_TYPES,
   LARGE_DECODED_BYTES,
   LARGE_INPUT_BYTES,
+  NATIVE_AUDIO_FORMATS,
   SPECTROGRAM_MAX_COLUMNS,
   SPECTROGRAM_MIN_COLUMNS,
   SPECTROGRAM_NON_PLOT_WIDTH,
+  STATUS,
+  SYNTHETIC_SAMPLE_RATE,
+  TESTED_FFMPEG_FORMATS,
+  TESTED_SAFARI_EXTRA_FORMATS,
+  TESTED_WEB_AUDIO_FORMATS,
 } from "./constants.js";
 import { decodeAudioFile } from "./decoders/index.js";
 import { downloadCanvasPng } from "./export.js";
+import { safePathSegment } from "./file-utils.js";
 import { createFixtureAudioBuffer, createSweepFixture, encodeWavPcm16 } from "./fixtures.js";
-import { formatTimeMmSs } from "./format.js";
+import { decoderLabel, formatBytes, formatList, formatTimeMmSs, labelWindow } from "./format.js";
 import { capColumnsForMatrixBudget, decodedByteSize } from "./memory.js";
 import { makePalette } from "./palette.js";
 import { formatReadout, spectrogramReadoutAtPoint } from "./readout.js";
@@ -66,6 +76,8 @@ let resizeTimer = 0;
 let renderedPaletteName = "";
 let renderedPalette = null;
 applyStoredControlSettings(els, loadStoredSettings());
+els.fileInput.accept = FILE_ACCEPT_TYPES.join(",");
+els.streamSelect.options[0].textContent = DECODER_STREAM_LABELS.browser;
 clampDbInputs();
 updateNativeSupportText();
 
@@ -235,7 +247,7 @@ function detailText() {
 function codecText(audio) {
   if (audio.codecLongName) return audio.codecLongName;
   if (audio.codecName) return audio.codecName.toUpperCase();
-  return audio.backend === "ffmpeg" ? "FFmpeg-decoded audio" : "Browser-decoded audio";
+  return DECODER_AUDIO_LABELS[audio.backend] || DECODER_AUDIO_LABELS.browser;
 }
 
 function channelText() {
@@ -313,7 +325,7 @@ function handleWorkerMessage(event) {
     clearRenderBitmap();
     prepareRenderWorkerMatrix();
     setProgress(1);
-    setStatus("Analysis complete.");
+    setStatus(STATUS.analysisComplete);
     els.exportButton.disabled = false;
     render();
   }
@@ -450,7 +462,7 @@ function handleRenderWorkerMessage(event) {
   state.renderBitmapPendingKey = "";
   state.renderBitmapVersion = message.version;
   render();
-  setStatus("Analysis complete.");
+  setStatus(STATUS.analysisComplete);
 }
 
 function displayNyquist(audio) {
@@ -460,21 +472,6 @@ function displayNyquist(audio) {
 function exportPng() {
   render({ forceSync: true });
   downloadCanvasPng(els.canvas, state.fileName);
-}
-
-function formatBytes(bytes) {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
-}
-
-function labelWindow(value) {
-  if (value === "blackmanHarris") return "Blackman-Harris";
-  return value[0].toUpperCase() + value.slice(1);
-}
-
-function decoderLabel(value) {
-  if (value === "ffmpeg") return "the FFmpeg decoder";
-  return "the browser backend";
 }
 
 async function promptForCompatibilityDecoder(file) {
@@ -496,24 +493,33 @@ function updateFfmpegProgress(event) {
 }
 
 function updateNativeSupportText() {
-  const supported = nativeAudioSupport();
-  els.nativeSupport.textContent = supported.length
-    ? `Browser mode is fastest for most files. This browser reports native ${supported.join(", ")} support.`
-    : "Browser mode is fastest for most files. FFmpeg is available for formats this browser cannot decode.";
+  const browserFormats = testedBrowserFormats(navigator.userAgent);
+  const reportedFormats = nativeAudioSupport();
+  const reportedExtras = reportedFormats.filter((format) => !browserFormats.includes(format));
+  const sentences = [
+    `Browser mode is fastest for tested ${formatList(browserFormats)} files.`,
+  ];
+  if (reportedExtras.length) {
+    sentences.push(`It may also handle ${formatList(reportedExtras)} natively.`);
+  }
+  sentences.push(`FFmpeg covers tested ${formatList(TESTED_FFMPEG_FORMATS)} files and preserves source rates for high-rate/lossless edge cases.`);
+  els.nativeSupport.textContent = sentences.join(" ");
+}
+
+function testedBrowserFormats(userAgent) {
+  const formats = [...TESTED_WEB_AUDIO_FORMATS];
+  if (isSafari(userAgent)) formats.push(...TESTED_SAFARI_EXTRA_FORMATS);
+  return formats;
+}
+
+function isSafari(userAgent) {
+  return /Safari\//.test(userAgent) && !/Chrome\/|Chromium\/|Firefox\/|Edg\//.test(userAgent);
 }
 
 function nativeAudioSupport() {
   const audio = document.createElement("audio");
   if (typeof audio.canPlayType !== "function") return [];
-  const formats = [
-    { label: "WAV", types: ['audio/wav; codecs="1"', "audio/wav", "audio/x-wav"] },
-    { label: "MP3", types: ["audio/mpeg", "audio/mp3"] },
-    { label: "AAC/M4A", types: ['audio/mp4; codecs="mp4a.40.2"', "audio/aac", "audio/x-m4a"] },
-    { label: "Ogg Vorbis", types: ['audio/ogg; codecs="vorbis"', "audio/ogg"] },
-    { label: "Opus", types: ['audio/ogg; codecs="opus"', 'audio/webm; codecs="opus"'] },
-    { label: "FLAC", types: ["audio/flac", "audio/x-flac", 'audio/ogg; codecs="flac"'] },
-  ];
-  return formats
+  return NATIVE_AUDIO_FORMATS
     .filter((format) => format.types.some((type) => audio.canPlayType(type) !== ""))
     .map((format) => format.label);
 }
@@ -615,7 +621,7 @@ els.canvas.addEventListener("mousemove", (event) => {
 });
 
 els.canvas.addEventListener("mouseleave", () => {
-  if (state.matrix) setStatus("Analysis complete.");
+  if (state.matrix) setStatus(STATUS.analysisComplete);
 });
 
 window.addEventListener("resize", () => {
@@ -628,7 +634,7 @@ window.addEventListener("resize", () => {
 
 if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
   window.__loadSyntheticSpectrogram = async () => {
-    const sampleRate = 44100;
+    const sampleRate = SYNTHETIC_SAMPLE_RATE;
     const seconds = 3;
     const context = new AudioContext({ sampleRate });
     const fixture = createSweepFixture({ sampleRate, seconds, channels: 2 });
@@ -659,7 +665,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
   };
 
   window.__loadGeneratedStressFile = async ({ seconds = 120, decoderMode = "browser" } = {}) => {
-    const sampleRate = 44100;
+    const sampleRate = SYNTHETIC_SAMPLE_RATE;
     const channels = 2;
     const fixture = createSweepFixture({ sampleRate, seconds, channels });
     const wav = encodeWavPcm16(fixture);
@@ -670,7 +676,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
   };
 
   window.__loadLocalSample = async (name) => {
-    const safeName = name.replace(/[^a-z0-9._-]+/gi, "");
+    const safeName = safePathSegment(name);
     const response = await fetch(`./test/fixtures/codec-samples/${safeName}`);
     if (!response.ok) {
       throw new Error(`Could not load local sample ${safeName}: ${response.status}`);
@@ -684,7 +690,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     for (const sampleName of sampleNames) {
       try {
         await window.__loadLocalSample(sampleName);
-        const complete = await waitForCondition(() => els.statusText.textContent === "Analysis complete.", {
+        const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
           timeoutMs: 10000,
           intervalMs: 50,
         });
@@ -716,7 +722,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 
   window.__spectrogramSmokeTest = async () => {
     if (!state.matrix) await window.__loadSyntheticSpectrogram();
-    const complete = await waitForCondition(() => els.statusText.textContent === "Analysis complete.", {
+    const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
       timeoutMs: 8000,
       intervalMs: 50,
     });
@@ -735,7 +741,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 
   window.__spectrogramStressTest = async ({ seconds = 120, decoderMode = "browser" } = {}) => {
     await window.__loadGeneratedStressFile({ seconds, decoderMode });
-    const complete = await waitForCondition(() => els.statusText.textContent === "Analysis complete.", {
+    const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
       timeoutMs: decoderMode === "ffmpeg" ? 45000 : 20000,
       intervalMs: 100,
     });

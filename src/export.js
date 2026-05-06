@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { sanitizeFileName, stripFileExtension } from "./file-utils.js";
+
 export function exportFileName(fileName) {
-  const clean = (fileName || "spectrogram").replace(/[\\/:"*?<>|]+/g, "-").trim();
-  const base = clean.replace(/\.[^.]+$/, "") || "spectrogram";
+  const clean = sanitizeFileName(fileName, { fallback: "spectrogram" });
+  const base = stripFileExtension(clean) || "spectrogram";
   return `${base}-spectrogram.png`;
 }
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { COMPATIBILITY_EXTENSIONS } from "../constants.js";
 import { decodeWithBrowser } from "./browser-decoder.js";
-
-const COMPATIBILITY_EXTENSIONS = /\.(ape|wv|wma|wmv|ac3|dts|mpc|mka|mkv|opus|aiff?|caf|alac|flac|m4a)$/i;
 
 export async function decodeAudioFile(file, options = {}) {
   const backend = options.backend || "browser";
@@ -27,7 +26,11 @@ export async function decodeAudioFile(file, options = {}) {
 }
 
 export function shouldOfferCompatibilityDecoder(file) {
-  return COMPATIBILITY_EXTENSIONS.test(file?.name || "");
+  return COMPATIBILITY_EXTENSIONS.some((extension) => fileExtensionIs(file, extension));
+}
+
+function fileExtensionIs(file, extension) {
+  return String(file?.name || "").toLowerCase().endsWith(`.${extension}`);
 }
 
 async function loadFfmpegDecoder(options) {

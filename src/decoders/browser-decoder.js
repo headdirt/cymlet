@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { decodedByteSize } from "../memory.js";
+import { DECODER_STREAM_LABELS } from "../constants.js";
 import { sniffSourceSampleRate } from "./sample-rate-sniffer.js";
 
 export async function decodeWithBrowser(file, { AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext } = {}) {
@@ -31,7 +32,7 @@ export function fromAudioBuffer(audioBuffer, metadata = {}) {
     inputBytes: metadata.inputBytes || 0,
     streamIndex: metadata.streamIndex || 0,
     streamCount: metadata.streamCount || 1,
-    streamLabel: metadata.streamLabel || "Browser decoded stream",
+    streamLabel: metadata.streamLabel || DECODER_STREAM_LABELS.browser,
     codecName: metadata.codecName || "",
     codecLongName: metadata.codecLongName || metadata.codecName || "",
     bitRate: metadata.bitRate || 0,

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { COMPATIBILITY_EXTENSIONS, FILE_ACCEPT_TYPES } from "../src/constants.js";
 import { shouldOfferCompatibilityDecoder } from "../src/decoders/index.js";
 import { CODEC_SAMPLES, codecSampleUrl, codecSamplesByMode, codecSamplesForReleaseBrowserSuite } from "./codec-samples.js";
 
@@ -22,6 +23,13 @@ test("compatibility sample manifest aligns with decoder offer heuristic", () => 
     if (sample.expectedMode === "compatibility") {
       assert.equal(shouldOfferCompatibilityDecoder(sample), true, sample.name);
     }
+  }
+});
+
+test("file picker accepts advertised compatibility extensions without broad media wildcard", () => {
+  assert.equal(FILE_ACCEPT_TYPES.includes("audio/*"), false);
+  for (const extension of COMPATIBILITY_EXTENSIONS) {
+    assert.equal(FILE_ACCEPT_TYPES.includes(`.${extension}`), true, extension);
   }
 });
 

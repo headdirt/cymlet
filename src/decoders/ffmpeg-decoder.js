@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { DECODER_STREAM_LABELS } from "../constants.js";
+import { safePathSegment, stripFileExtension } from "../file-utils.js";
 import { decodeWithBrowser } from "./browser-decoder.js";
 
 const DEFAULT_VENDOR_BASE = new URL("../../vendor/ffmpeg", import.meta.url).href;
@@ -49,7 +51,7 @@ export async function decodeWithFfmpeg(file, options = {}) {
       sourceSampleRate: stream?.sampleRate || decoded.sourceSampleRate,
       streamIndex,
       streamCount: Math.max(1, streams.length),
-      streamLabel: stream ? formatStreamLabel(stream, streamIndex, streams.length) : "FFmpeg decoded stream",
+      streamLabel: stream ? formatStreamLabel(stream, streamIndex, streams.length) : DECODER_STREAM_LABELS.ffmpeg,
       streams,
     };
   } finally {
@@ -172,11 +174,11 @@ async function deleteIfPresent(ffmpeg, path) {
 }
 
 function safeVirtualName(name) {
-  return name.replace(/[^a-z0-9._-]+/gi, "_") || "input.audio";
+  return safePathSegment(name, "_") || "input.audio";
 }
 
 function stripExtension(name) {
-  return safeVirtualName(name).replace(/\.[^.]+$/, "") || "decoded";
+  return stripFileExtension(safeVirtualName(name)) || "decoded";
 }
 
 function formatStreamLabel(stream, index, count) {
