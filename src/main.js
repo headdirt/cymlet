@@ -14,7 +14,6 @@ import {
   SPECTROGRAM_NON_PLOT_WIDTH,
   STATUS,
   SYNTHETIC_SAMPLE_RATE,
-  TESTED_FFMPEG_FORMATS,
   TESTED_SAFARI_EXTRA_FORMATS,
   TESTED_WEB_AUDIO_FORMATS,
 } from "./constants.js";
@@ -38,6 +37,8 @@ const els = {
   nativeSupport: document.querySelector("#nativeSupport"),
   canvas: document.querySelector("#spectrogramCanvas"),
   fileMeta: document.querySelector("#fileMeta"),
+  decoderHelpButton: document.querySelector("#decoderHelpButton"),
+  decoderHelp: document.querySelector("#decoderHelp"),
   decoderModeSelect: document.querySelector("#decoderModeSelect"),
   streamSelect: document.querySelector("#streamSelect"),
   channelSelect: document.querySelector("#channelSelect"),
@@ -493,17 +494,15 @@ function updateFfmpegProgress(event) {
 }
 
 function updateNativeSupportText() {
-  const browserFormats = testedBrowserFormats(navigator.userAgent);
-  const reportedFormats = nativeAudioSupport();
-  const reportedExtras = reportedFormats.filter((format) => !browserFormats.includes(format));
-  const sentences = [
-    `Browser mode is fastest for tested ${formatList(browserFormats)} files.`,
-  ];
-  if (reportedExtras.length) {
-    sentences.push(`It may also handle ${formatList(reportedExtras)} natively.`);
-  }
-  sentences.push(`FFmpeg covers tested ${formatList(TESTED_FFMPEG_FORMATS)} files and preserves source rates for high-rate/lossless edge cases.`);
-  els.nativeSupport.textContent = sentences.join(" ");
+  const formats = nativeBrowserFormats(navigator.userAgent);
+  els.nativeSupport.textContent = `Browser mode supports ${formatList(formats)} natively.`;
+}
+
+function nativeBrowserFormats(userAgent) {
+  return uniqueLabels([
+    ...testedBrowserFormats(userAgent),
+    ...nativeAudioSupport(),
+  ]);
 }
 
 function testedBrowserFormats(userAgent) {
@@ -524,13 +523,36 @@ function nativeAudioSupport() {
     .map((format) => format.label);
 }
 
+function uniqueLabels(labels) {
+  return [...new Set(labels)];
+}
+
 function openFilePicker() {
   els.fileInput.value = "";
   els.fileInput.click();
 }
 
+function setDecoderHelpOpen(open) {
+  els.decoderHelp.classList.toggle("open", open);
+  els.decoderHelpButton.setAttribute("aria-expanded", String(open));
+}
+
+function toggleDecoderHelp() {
+  setDecoderHelpOpen(!els.decoderHelp.classList.contains("open"));
+}
+
 els.fileInput.addEventListener("change", () => openFile(els.fileInput.files[0]));
 els.exportButton.addEventListener("click", exportPng);
+els.decoderHelpButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleDecoderHelp();
+});
+document.addEventListener("click", () => setDecoderHelpOpen(false));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setDecoderHelpOpen(false);
+});
+els.decoderModeSelect.addEventListener("pointerdown", () => setDecoderHelpOpen(false));
+els.decoderModeSelect.addEventListener("focus", () => setDecoderHelpOpen(false));
 els.streamSelect.addEventListener("change", () => {
   const streamIndex = Number(els.streamSelect.value || 0);
   if (state.currentFile && state.audioBuffer?.backend === "ffmpeg") {
@@ -542,6 +564,7 @@ els.streamSelect.addEventListener("change", () => {
 });
 els.channelSelect.addEventListener("change", analyze);
 els.decoderModeSelect.addEventListener("change", () => {
+  setDecoderHelpOpen(false);
   persistSettings();
   if (state.currentFile) {
     const streamIndex = state.audioBuffer?.backend === "ffmpeg" ? state.audioBuffer.streamIndex : 0;

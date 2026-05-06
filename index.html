@@ -33,13 +33,19 @@
       </section>
 
       <aside class="controls" aria-label="Spectrogram controls">
-        <label>
-          Decoder
+        <div class="controlField">
+          <span class="labelRow">
+            <label for="decoderModeSelect" class="controlLabel">Decoder</label>
+            <button id="decoderHelpButton" class="helpButton" type="button" aria-describedby="decoderHelp" aria-expanded="false">?</button>
+            <span id="decoderHelp" class="tooltip" role="tooltip">
+              Browser mode is fastest for WAV, MP3, AAC/M4A, Ogg Vorbis, and FLAC files. Safari also supports ALAC/M4A and AC-3. Use FFmpeg for APE, WavPack, Musepack, WMA, DTS, and audio with very high sample rates where browser decoding resamples the audio.
+            </span>
+          </span>
           <select id="decoderModeSelect">
             <option value="browser" selected>Browser first</option>
             <option value="ffmpeg">FFmpeg for more formats</option>
           </select>
-        </label>
+        </div>
         <label>
           Stream
           <select id="streamSelect" disabled>

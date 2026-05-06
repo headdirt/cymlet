@@ -161,12 +161,66 @@ button:disabled {
   background: #10131b;
 }
 
-.controls label {
+.controls label,
+.controlField {
+  position: relative;
   display: grid;
   gap: 6px;
   color: #aeb7ca;
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.controlLabel {
+  display: inline;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.helpButton {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0;
+  color: #aeb7ca;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.helpButton:hover,
+.helpButton:focus-visible {
+  color: #f4f6fb;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 5;
+  top: 22px;
+  right: 0;
+  pointer-events: none;
+  display: none;
+  width: min(280px, 80vw);
+  border: 1px solid #3b4356;
+  border-radius: 6px;
+  padding: 10px;
+  color: #d8deeb;
+  background: #080b12;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.35);
+  font-size: 12px;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.tooltip.open {
+  display: block;
 }
 
 .controls select,
