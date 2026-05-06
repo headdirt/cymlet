@@ -1,6 +1,6 @@
 # Cymlet
 
-Cymlet is a local-first audio spectrogram analyzer that runs entirely in the browser. It opens audio files from your machine, decodes them client-side, analyzes them in a worker, and renders an exportable spectrogram without server-side audio processing.
+Cymlet is a local-first audio spectrogram analyzer that runs entirely in the browser. Click or drop an audio file, decode it client-side, analyze it in a worker, and render an exportable spectrogram without server-side audio processing.
 
 ## Features
 

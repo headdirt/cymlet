@@ -25,6 +25,7 @@ const els = {
   exportButton: document.querySelector("#exportButton"),
   dropZone: document.querySelector("#dropZone"),
   emptyState: document.querySelector("#emptyState"),
+  nativeSupport: document.querySelector("#nativeSupport"),
   canvas: document.querySelector("#spectrogramCanvas"),
   fileMeta: document.querySelector("#fileMeta"),
   decoderModeSelect: document.querySelector("#decoderModeSelect"),
@@ -59,6 +60,7 @@ let renderedPaletteName = "";
 let renderedPalette = null;
 applyStoredControlSettings(els, loadStoredSettings());
 clampDbInputs();
+updateNativeSupportText();
 
 function settings() {
   return {
@@ -337,6 +339,34 @@ function updateFfmpegProgress(event) {
   if (Number.isFinite(event.ratio)) setProgress(event.ratio);
 }
 
+function updateNativeSupportText() {
+  const supported = nativeAudioSupport();
+  els.nativeSupport.textContent = supported.length
+    ? `Native here: ${supported.join(", ")}. Use FFmpeg for the rest.`
+    : "Native support could not be detected. FFmpeg is available for broader formats.";
+}
+
+function nativeAudioSupport() {
+  const audio = document.createElement("audio");
+  if (typeof audio.canPlayType !== "function") return [];
+  const formats = [
+    { label: "WAV", types: ['audio/wav; codecs="1"', "audio/wav", "audio/x-wav"] },
+    { label: "MP3", types: ["audio/mpeg", "audio/mp3"] },
+    { label: "AAC/M4A", types: ['audio/mp4; codecs="mp4a.40.2"', "audio/aac", "audio/x-m4a"] },
+    { label: "Ogg Vorbis", types: ['audio/ogg; codecs="vorbis"', "audio/ogg"] },
+    { label: "Opus", types: ['audio/ogg; codecs="opus"', 'audio/webm; codecs="opus"'] },
+    { label: "FLAC", types: ["audio/flac", "audio/x-flac", 'audio/ogg; codecs="flac"'] },
+  ];
+  return formats
+    .filter((format) => format.types.some((type) => audio.canPlayType(type) !== ""))
+    .map((format) => format.label);
+}
+
+function openFilePicker() {
+  els.fileInput.value = "";
+  els.fileInput.click();
+}
+
 els.fileInput.addEventListener("change", () => openFile(els.fileInput.files[0]));
 els.exportButton.addEventListener("click", exportPng);
 els.streamSelect.addEventListener("change", () => {
@@ -395,6 +425,16 @@ for (const name of ["dragleave", "drop"]) {
 
 els.dropZone.addEventListener("drop", (event) => {
   openFile(event.dataTransfer.files[0]);
+});
+
+els.dropZone.addEventListener("click", () => {
+  openFilePicker();
+});
+
+els.dropZone.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  openFilePicker();
 });
 
 els.canvas.addEventListener("mousemove", (event) => {

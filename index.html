@@ -24,11 +24,11 @@
         </div>
       </header>
 
-      <section id="dropZone" class="workspace" aria-label="Spectrogram workspace">
+      <section id="dropZone" class="workspace" role="button" tabindex="0" aria-label="Open or drop an audio file">
         <canvas id="spectrogramCanvas" width="1200" height="720"></canvas>
         <div id="emptyState" class="emptyState">
-          <strong>Drop audio here</strong>
-          <span>WAV, MP3, M4A/AAC, and Ogg support depends on your browser.</span>
+          <strong>Click or drop audio here</strong>
+          <span id="nativeSupport">Checking native audio support...</span>
         </div>
       </section>
 

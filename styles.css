@@ -98,10 +98,16 @@ button:disabled {
   border-radius: 8px;
   overflow: hidden;
   background: #020306;
+  cursor: pointer;
 }
 
 .workspace.dragging {
   border-color: #8fb8ff;
+}
+
+.workspace:focus-visible {
+  outline: 2px solid #8fb8ff;
+  outline-offset: 2px;
 }
 
 #spectrogramCanvas {
@@ -117,6 +123,7 @@ button:disabled {
   display: grid;
   place-content: center;
   gap: 8px;
+  padding: 20px;
   text-align: center;
   color: #abb4c8;
   pointer-events: none;
@@ -125,6 +132,12 @@ button:disabled {
 .emptyState strong {
   color: #f4f6fb;
   font-size: 18px;
+}
+
+.emptyState span {
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .emptyState.hidden {
