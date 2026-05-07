@@ -82,8 +82,7 @@ function drawFrequencyRuler(ctx, maxFreq, x, y, height) {
 
 function formatFrequencyTick(frequency) {
   if (frequency < 1000) return `${Math.round(frequency)} Hz`;
-  const khz = frequency / 1000;
-  return `${Number.isInteger(khz) ? khz : khz.toFixed(2)} kHz`;
+  return `${Math.round(frequency / 1000)} kHz`;
 }
 
 function drawPalette(ctx, x, y, width, height, minDb, maxDb, palette) {
