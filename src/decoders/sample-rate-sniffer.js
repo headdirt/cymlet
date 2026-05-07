@@ -6,10 +6,12 @@ const MP3_SAMPLE_RATES = {
 };
 
 export function sniffSourceSampleRate(arrayBuffer) {
+  // Magic-byte sniffers (WAV/FLAC/Ogg) run before MP3's byte-scan heuristic, which
+  // otherwise false-positives on FLAC frame sync (0xFF F8) and similar patterns.
   return sniffWavSampleRate(arrayBuffer)
-    || sniffMp3SampleRate(arrayBuffer)
     || sniffFlacSampleRate(arrayBuffer)
     || sniffOggVorbisSampleRate(arrayBuffer)
+    || sniffMp3SampleRate(arrayBuffer)
     || null;
 }
 

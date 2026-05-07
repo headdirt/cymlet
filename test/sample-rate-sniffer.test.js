@@ -64,6 +64,16 @@ test("Ogg Vorbis sniffer rejects non-Vorbis first packets", () => {
   assert.equal(sniffOggVorbisSampleRate(bytes.buffer), null);
 });
 
+test("source-rate chain prefers FLAC over MP3 byte-scan false-positives", () => {
+  const flac = flacStreamInfo(96000);
+  const mp3Decoy = new Uint8Array([0xff, 0xfb, 0x90, 0x64]); // MP3-shaped sync that decodes to 44100
+  const bytes = new Uint8Array(flac.length + mp3Decoy.length);
+  bytes.set(flac, 0);
+  bytes.set(mp3Decoy, flac.length);
+  assert.equal(sniffMp3SampleRate(bytes.buffer), 44100);
+  assert.equal(sniffSourceSampleRate(bytes.buffer), 96000);
+});
+
 function flacStreamInfo(sampleRate) {
   const bytes = new Uint8Array(42);
   writeAscii(bytes, 0, "fLaC");
