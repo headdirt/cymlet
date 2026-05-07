@@ -1,171 +1,113 @@
 # Cymlet
 
-Cymlet is a local-first audio spectrogram analyzer that runs entirely in the browser. Click or drop an audio file, decode it client-side, analyze it in a worker, and render an exportable spectrogram without server-side audio processing.
+Cymlet is a local-first audio spectrogram analyzer that runs entirely in your browser. Drop in an audio file, get an inspectable, exportable spectrogram — nothing is uploaded.
 
 ## Features
 
-- Browser-native decoding for common formats such as WAV, MP3, AAC/M4A, and Ogg/Vorbis where supported by the current browser.
-- Optional FFmpeg WASM decoder for formats and metadata paths that native browser decoders do not expose.
-- Channel and stream selection, FFT size and window controls, palette selection, dB range controls, hover readout, and PNG export.
-- Worker-based FFT analysis with memory caps for large matrices.
-- Lazy compatibility bundle loading: the FFmpeg WASM files are not fetched during successful browser-native decoding.
+- Native browser decoding for WAV, MP3, AAC/M4A, Ogg Vorbis, and FLAC, plus ALAC and AC-3 on Safari.
+- Optional FFmpeg WASM fallback for formats the browser can't handle (APE, WavPack, WMA, DTS, Musepack, and similar). The bundle is loaded lazily, only when needed.
+- Worker-based FFT analysis with configurable size, window, palette, and dB range.
+- Stream and channel selection (FFmpeg path), hover readout for time/frequency/dB, and PNG export.
 
 ## Run
 
-Serve the directory with any static server, then open the local URL:
+There's no build step. Serve the directory with any static server:
 
 ```sh
 python3 -m http.server 4173
 ```
 
-Then visit `http://localhost:4173`.
+Then open `http://localhost:4173`.
 
-The app performs browser-native audio decoding and worker-based FFT analysis entirely on the client. Browser-supported formats vary; Browser mode can offer the optional FFmpeg WASM decoder after native decode failure, and FFmpeg mode loads it directly.
+## Browser support
+
+The browser decoder uses Web Audio's `decodeAudioData`, so supported formats vary by browser, OS, container, and codec. The table below reflects the local fixture matrix on Safari 26.4, Firefox 150, and Chromium 148:
+
+| Format | Path | Notes |
+| --- | --- | --- |
+| WAV PCM | Browser | All three browsers. |
+| MP3 | Browser | All three browsers. |
+| M4A/AAC | Browser | All three browsers. |
+| Ogg Vorbis | Browser | All three browsers. |
+| FLAC | Browser | All three browsers, including 96 kHz at source rate. |
+| ALAC/M4A | Safari only | Firefox and Helium/Chromium need FFmpeg. |
+| AC-3 | Safari only | Firefox and Helium/Chromium need FFmpeg. |
+| DTS | FFmpeg | No native support in tested browsers. |
+| APE, WavPack, WMA, Musepack | FFmpeg | No browser support. |
+
+Cymlet sniffs WAV, MP3, FLAC, and Ogg Vorbis source rates and decodes through an `OfflineAudioContext` at that rate. The offline context's sample rate is decoupled from the device output, so it stays reliable on platforms that override `new AudioContext({ sampleRate })` (older browsers, iOS, unusual audio-device rates). If the offline path rejects the rate, decoding falls back to `AudioContext`, and the UI shows both the source and decoded sample rates whenever they differ. For source-rate parity in other containers, use FFmpeg mode.
+
+The vendored FFmpeg build is single-threaded so any plain static server works — threaded builds need cross-origin isolation headers, which we deliberately avoid.
+
+### Decoder modes
+
+- **Browser first** (default): native Web Audio decode. If the file is a likely compatibility format and decoding fails, the UI prompts before loading FFmpeg.
+- **FFmpeg for more formats**: loads the WASM bundle directly. Use this when you already know the file needs FFmpeg, or when you want stream metadata and source-rate parity.
+
+Browser-mode limitations to be aware of:
+
+- The whole file is read before decoding starts.
+- Decoders may resample to the `AudioContext` rate.
+- Codec name, bitrate, bit depth, and stream metadata are limited or unavailable.
+- Multi-stream containers aren't exposed as selectable streams.
+
+The app also reads `HTMLAudioElement.canPlayType()` at runtime and surfaces additional reported native support as a hint. Treat that as browser-advertised support, not proof that every codec inside that container will actually decode through Web Audio.
 
 ## Architecture
 
-- `src/main.js` owns UI state, decode orchestration, worker lifecycle, settings persistence, and local QA hooks.
-- `src/constants.js` contains shared canvas, memory, column, plot, and tick constants.
-- `src/decoders/browser-decoder.js` wraps Web Audio decoding in a common decoded-audio shape.
-- `src/decoders/index.js` gates decoder selection. The browser decoder is imported statically; FFmpeg is loaded only through a dynamic import when FFmpeg mode is explicitly selected or accepted after browser decode failure.
-- `src/decoders/ffmpeg-decoder.js` lazy-loads the optional FFmpeg runtime, transcodes unsupported input to a temporary WAV, then reuses browser decoding for normalized channel data.
-- The FFmpeg decoder also probes audio stream metadata and maps selected streams with `-map 0:a:N`.
-- `vendor/ffmpeg/` contains the optional single-thread FFmpeg WASM bundle and its setup/licensing notes.
-- `src/dsp.js` owns FFT, windowing, dB conversion, and matrix generation.
-- `src/render.js` owns annotated canvas rendering and cached bitmap-canvas drawing.
-- `src/palette.js` provides compact typed-array palette tables.
-- `src/fixtures.js` creates deterministic sweep fixtures and WAV data for tests.
-- `src/export.js` owns PNG export naming and download behavior.
-- `src/memory.js` owns decoded-audio and matrix memory estimates plus the spectrogram column cap.
-- `src/readout.js` maps canvas hover coordinates to time, frequency, and dB readouts.
-- `src/smoke.js` provides the localhost browser smoke-test helpers.
-- `src/settings-store.js` persists user-facing control settings in localStorage.
+The UI lives in `src/main.js`. Decoding is split into `src/decoders/`: a statically-imported browser path and a dynamically-imported FFmpeg path that only loads when selected or accepted. FFT, windowing, and matrix generation happen in a Web Worker (`src/analysis-worker.js`, `src/dsp.js`); rendering is offloaded to a bitmap-canvas worker (`src/render.js`, `src/render-bitmap-worker.js`). Settings persist via `src/settings-store.js`, and `src/memory.js` caps spectrogram column counts so very long files don't blow out memory.
 
-## Test
+## Develop
+
+Run the test suite (DSP, decoders, rendering, palettes, settings, export, readouts, fixtures):
 
 ```sh
 node --test
 ```
 
-Run syntax checks for browser modules and scripts:
+Syntax-check the browser modules and scripts:
 
 ```sh
 node --run check
 ```
 
-The test suite covers DSP behavior, decoding boundaries, sample-rate sniffing, memory estimates, palettes, rendering image stability, settings persistence, export naming, readouts, and fixture metadata.
+Load the built-in sweep fixture through the real worker/render path:
 
-Open `http://localhost:4173/?demo=1` to load the built-in generated sweep fixture through the same worker/render path as a real file.
+```text
+http://localhost:4173/?demo=1
+```
 
-For a lightweight browser smoke test, open the app on localhost and run:
+Run the in-browser smoke test:
 
 ```js
 await window.__spectrogramSmokeTest()
 ```
 
-Or visit `http://localhost:4173/?smoke=1` and inspect `document.body.dataset.smokeResult`.
+Or visit `http://localhost:4173/?smoke=1` and read `document.body.dataset.smokeResult`.
 
-## Fixtures
+Run the full fixture suites against the browser or FFmpeg path; results land in `document.body.dataset.suiteResult`:
 
-Optional upstream audio fixtures are tracked in `test/codec-samples.js`. They are used for codec coverage only and are not part of the app distribution.
+```text
+http://localhost:4173/?suite=browser
+http://localhost:4173/?suite=compatibility
+```
 
-Download them with:
+External codec samples referenced by `test/codec-samples.js` are not part of the distribution. Download them with:
 
 ```sh
 node scripts/download-codec-samples.mjs
 ```
 
-After downloading the fixtures, load a native browser fixture directly with:
-
-```text
-http://localhost:4173/?sample=2ch-44100Hz-16bps.wav
-```
-
-The `?sample=` helper is localhost-only and intended for manual/browser smoke testing.
-
-Run all browser-expected fixtures through the real browser decode/analyze/render path with:
-
-```text
-http://localhost:4173/?suite=browser
-```
-
-The JSON result is written to `document.body.dataset.suiteResult`.
-
-Run compatibility fixtures with the vendored FFmpeg WASM bundle:
-
-```text
-http://localhost:4173/?suite=compatibility
-```
-
-The current vendored bundle is `@ffmpeg/ffmpeg@0.12.15` plus single-thread `@ffmpeg/core@0.12.10`.
-
-## Browser Support
-
-Cymlet has two visible decoder modes:
-
-- Browser first: default, fast startup, native Web Audio decode first, with a consent prompt before loading the optional FFmpeg bundle after likely compatibility-format failures.
-- FFmpeg for more formats: lazy FFmpeg WASM path selected directly for formats the browser cannot decode.
-
-The Browser decoder uses Web Audio `decodeAudioData`. It is available in current Chromium, Firefox, and Safari, but supported audio formats vary by browser, OS, container, and codec.
-
-Measured Browser-mode support from the local fixture matrix on Safari 26.4, Firefox 150, and Helium/Chromium 148:
-
-| Format | Expected Path | Notes |
-| --- | --- | --- |
-| WAV PCM | Browser | Supported in all three tested browsers. |
-| MP3 | Browser | Supported in all three tested browsers. |
-| M4A/AAC | Browser | Supported in all three tested browsers. |
-| Ogg/Vorbis | Browser | Supported in all three tested browsers. |
-| FLAC | Browser | Supported in all three tested browsers, though high-rate files may decode at the browser context rate. |
-| ALAC/M4A | Browser on Safari, FFmpeg elsewhere | Safari decoded the ALAC fixture; Firefox and Helium/Chromium did not. |
-| AC-3 | Browser on Safari, FFmpeg elsewhere | Safari decoded the AC-3 fixture; Firefox and Helium/Chromium did not. |
-
-The app also reads `HTMLAudioElement.canPlayType()` at runtime and surfaces additional reported native support as a hint. Treat that as browser-advertised support, not proof that every codec inside that container will decode through Web Audio.
-
-Important Browser decoder limitations:
-
-- The full file is read before decoding.
-- Browser decoders may resample to the `AudioContext` sample rate.
-- Codec name, bitrate, bits per sample, and stream metadata are limited.
-- Multi-stream containers are not exposed as selectable streams.
-
-The Browser decoder sniffs WAV, MP3, FLAC, and Ogg Vorbis source sample rates before creating `AudioContext`, then requests that rate via `new AudioContext({ sampleRate })`. If a browser does not honor the requested rate, the UI shows both source and decoded sample rates. Source-rate parity for more containers still requires FFmpeg mode.
-
-FFmpeg mode is gated behind a dynamic import and only loads when explicitly selected or accepted after browser decode failure in Browser mode.
-
-Measured FFmpeg-mode cases:
-
-| Format | Expected Path | Notes |
-| --- | --- | --- |
-| FLAC | Browser or FFmpeg | Browsers decoded the tested fixtures; FFmpeg preserved source rates and provides metadata. |
-| ALAC/M4A | Safari browser or FFmpeg | ALAC-in-M4A is not a reliable cross-browser native target. |
-| APE | FFmpeg | External fixture coverage target. |
-| WavPack | FFmpeg | External fixture coverage target. |
-| WMA | FFmpeg | External fixture coverage target. |
-| AC-3/DTS | Safari browser for AC-3, FFmpeg for both | DTS required FFmpeg in all tested browsers. |
-| Musepack | FFmpeg | External fixture coverage target. |
-
-Threaded FFmpeg builds may require cross-origin isolation headers. The current integration uses an unthreaded bundle so ordinary static servers stay simple.
+Then load any sample directly with `?sample=<filename>` (localhost only).
 
 ## Provenance
 
-Cymlet is a greenfield browser application. Its source is project-authored code, with the third-party dependencies and external fixtures noted here.
+Cymlet is a greenfield project. During planning, [Spek](https://github.com/alexkay/spek) was reviewed for desktop-analyzer expectations — decode and metadata shape, FFT intervaling, window functions, dB averaging, palette formulas, and ruler conventions. Cymlet is not a port.
 
-During early planning, selected open-source spectrogram behavior was reviewed for comparison with common desktop-analyzer expectations: decode and metadata shape, FFT intervaling, window functions, dB averaging, palette formulas, and ruler conventions. One reference project was Spek: https://github.com/alexkay/spek. Cymlet is not a direct port.
+The SoX palette derives from Rob Sykes' SoX default; the Spectrum palette follows a modified Dan Bruton spectrum algorithm.
 
-The optional FFmpeg decoder vendors browser files from:
-
-- `@ffmpeg/ffmpeg@0.12.15`
-- `@ffmpeg/core@0.12.10`
-
-Vendored files live under `vendor/ffmpeg/` and are loaded only when FFmpeg mode is selected or accepted after browser decode failure in Browser mode. The current vendored package license metadata is documented in `vendor/ffmpeg/THIRD_PARTY_NOTICES.md`: `@ffmpeg/ffmpeg@0.12.15` is MIT and `@ffmpeg/core@0.12.10` is GPL-2.0-or-later.
-
-Keep the FFmpeg bundle's upstream license notices intact when updating or redistributing the vendored files. FFmpeg licensing can vary with build configuration, codecs, and linked libraries, so release packaging should verify the exact bundle provenance.
-
-The SoX and Spectrum palettes follow established spectrogram color formulas. The SoX palette derives from Rob Sykes' SoX default palette; the Spectrum palette follows a modified Dan Bruton spectrum algorithm.
+The optional FFmpeg WASM bundle in `vendor/ffmpeg/` is `@ffmpeg/ffmpeg@0.12.15` (MIT) and single-thread `@ffmpeg/core@0.12.10` (GPL-2.0-or-later). Upstream notices live in `vendor/ffmpeg/THIRD_PARTY_NOTICES.md` and must stay intact when redistributing. FFmpeg licensing varies with build configuration, codecs, and linked libraries, so verify provenance for any release that ships the bundle.
 
 ## License
 
-Project-authored source code is licensed under AGPL-3.0-or-later. See `LICENSE`.
-
-The optional FFmpeg WASM bundle under `vendor/ffmpeg/` retains its upstream licenses and notices; Cymlet does not relicense it.
+Project source is AGPL-3.0-or-later; see `LICENSE`. The vendored FFmpeg bundle keeps its upstream licenses — Cymlet does not relicense it.
