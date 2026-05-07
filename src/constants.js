@@ -2,6 +2,8 @@
 export const CANVAS_MIN_WIDTH = 640;
 export const CANVAS_MIN_HEIGHT = 420;
 export const CANVAS_MAX_DPR = 2;
+export const EXPORT_IMAGE_WIDTH = 1600;
+export const EXPORT_IMAGE_HEIGHT = 1000;
 
 export const LARGE_INPUT_BYTES = 250 * 1024 * 1024;
 export const LARGE_DECODED_BYTES = 600 * 1024 * 1024;

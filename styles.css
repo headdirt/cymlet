@@ -265,7 +265,32 @@ button:disabled {
   margin: 0;
   color: #a8b0c2;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
   line-height: 1.35;
+}
+
+.statusToast {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  z-index: 20;
+  display: none;
+  max-width: 520px;
+  margin: 0 auto;
+  border: 1px solid #4b556d;
+  border-radius: 8px;
+  padding: 11px 13px;
+  color: #f4f6fb;
+  background: #151a25;
+  box-shadow: 0 16px 42px rgb(0 0 0 / 0.42);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.statusToast.open {
+  display: block;
 }
 
 .controlFooter {
@@ -326,6 +351,12 @@ button:disabled {
   .brand p,
   .status {
     font-size: 12px;
+  }
+
+  .statusToast {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
   }
 
   .workspace,

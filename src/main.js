@@ -5,6 +5,8 @@ import {
   CANVAS_MIN_WIDTH,
   DECODER_AUDIO_LABELS,
   DECODER_STREAM_LABELS,
+  EXPORT_IMAGE_HEIGHT,
+  EXPORT_IMAGE_WIDTH,
   FILE_ACCEPT_TYPES,
   LARGE_DECODED_BYTES,
   LARGE_INPUT_BYTES,
@@ -50,6 +52,7 @@ const els = {
   maxDbInput: document.querySelector("#maxDbInput"),
   progressBar: document.querySelector("#progressBar"),
   statusText: document.querySelector("#statusText"),
+  statusToast: document.querySelector("#statusToast"),
 };
 
 const state = {
@@ -75,6 +78,7 @@ const state = {
 
 const ctx = els.canvas.getContext("2d", { alpha: false });
 let resizeTimer = 0;
+let statusToastTimer = 0;
 let renderedPaletteName = "";
 let renderedPalette = null;
 applyStoredControlSettings(els, loadStoredSettings());
@@ -106,8 +110,24 @@ function persistSettings() {
   saveStoredSettings(settings());
 }
 
-function setStatus(text) {
+function setStatus(text, { toast = false } = {}) {
   els.statusText.textContent = text;
+  if (toast) showStatusToast(text);
+}
+
+function showStatusToast(text) {
+  clearTimeout(statusToastTimer);
+  els.statusToast.textContent = text;
+  els.statusToast.classList.add("open");
+  statusToastTimer = setTimeout(() => {
+    hideStatusToast();
+  }, 5200);
+}
+
+function hideStatusToast() {
+  clearTimeout(statusToastTimer);
+  statusToastTimer = 0;
+  els.statusToast.classList.remove("open");
 }
 
 function setProgress(value) {
@@ -128,14 +148,14 @@ function setWorkspaceHasFile(hasFile) {
   }
 }
 
-function clearLoadedAudio({ fileMetaText, statusText }) {
+function clearLoadedAudio({ fileMetaText, statusText, toast = false }) {
   state.audioBuffer = null;
   state.matrix = null;
   els.exportButton.disabled = true;
   els.fileMeta.textContent = fileMetaText;
   setWorkspaceHasFile(false);
   setProgress(0);
-  setStatus(statusText);
+  setStatus(statusText, { toast });
   render();
 }
 
@@ -172,13 +192,7 @@ async function openFile(file, overrides = {}) {
   if (!file) return;
   const openId = ++state.openId;
   if (isClearlyUnsupportedFile(file)) {
-    state.currentFile = null;
-    state.fileName = "";
-    state.analysisId++;
-    clearLoadedAudio({
-      fileMetaText: "Open an audio file to begin.",
-      statusText: "Unsupported file. Choose an audio file in a supported format.",
-    });
+    showStatusToast("Unsupported file. Choose an audio file in a supported format.");
     return;
   }
   state.currentFile = file;
@@ -188,6 +202,7 @@ async function openFile(file, overrides = {}) {
   setWorkspaceHasFile(true);
   els.exportButton.disabled = true;
   setProgress(0);
+  hideStatusToast();
   const s = settings();
   setStatus(file.size > LARGE_INPUT_BYTES
     ? `Decoding a large file (${formatBytes(file.size)}) with ${decoderLabel(s.decoderMode)}...`
@@ -215,6 +230,7 @@ async function openFile(file, overrides = {}) {
     clearLoadedAudio({
       fileMetaText: file.name,
       statusText: `Could not decode this file. ${error.message || error}`,
+      toast: true,
     });
   }
 }
@@ -500,8 +516,17 @@ function displayNyquist(audio) {
 }
 
 function exportPng() {
-  render({ forceSync: true });
-  downloadCanvasPng(els.canvas, state.fileName);
+  if (!state.matrix || !state.audioBuffer) return;
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = EXPORT_IMAGE_WIDTH;
+  exportCanvas.height = EXPORT_IMAGE_HEIGHT;
+  const exportCtx = exportCanvas.getContext("2d", { alpha: false });
+  drawSpectrogram(exportCtx, {
+    ...spectrogramRenderOptions(settings()),
+    width: EXPORT_IMAGE_WIDTH,
+    height: EXPORT_IMAGE_HEIGHT,
+  });
+  downloadCanvasPng(exportCanvas, state.fileName);
 }
 
 async function promptForCompatibilityDecoder(file) {
