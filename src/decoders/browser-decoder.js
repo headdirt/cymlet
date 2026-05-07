@@ -3,23 +3,48 @@ import { decodedByteSize } from "../memory.js";
 import { DECODER_STREAM_LABELS } from "../constants.js";
 import { sniffSourceSampleRate } from "./sample-rate-sniffer.js";
 
-export async function decodeWithBrowser(file, { AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext } = {}) {
-  if (!AudioContextClass) {
+export async function decodeWithBrowser(file, options = {}) {
+  const {
+    AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext,
+    OfflineAudioContextClass = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext,
+  } = options;
+  if (!AudioContextClass && !OfflineAudioContextClass) {
     throw new Error("Web Audio decoding is not available in this browser.");
   }
 
   const arrayBuffer = await file.arrayBuffer();
   const sourceSampleRate = sniffSourceSampleRate(arrayBuffer);
+  const audioBuffer = await decodeAudioBuffer(arrayBuffer, {
+    AudioContextClass,
+    OfflineAudioContextClass,
+    sourceSampleRate,
+  });
+  return fromAudioBuffer(audioBuffer, {
+    backend: "browser",
+    fileName: file.name,
+    inputBytes: file.size,
+    sourceSampleRate,
+    streamIndex: 0,
+  });
+}
+
+async function decodeAudioBuffer(arrayBuffer, { AudioContextClass, OfflineAudioContextClass, sourceSampleRate }) {
+  // OfflineAudioContext's sample rate is decoupled from the device output, so platforms
+  // that silently override AudioContext({ sampleRate }) still honor the requested rate here.
+  if (OfflineAudioContextClass && sourceSampleRate) {
+    try {
+      const offline = new OfflineAudioContextClass(1, 1, sourceSampleRate);
+      return await offline.decodeAudioData(arrayBuffer.slice(0));
+    } catch {
+      // Fall through to the online AudioContext path.
+    }
+  }
+  if (!AudioContextClass) {
+    throw new Error("Web Audio decoding is not available in this browser.");
+  }
   const context = new AudioContextClass(sourceSampleRate ? { sampleRate: sourceSampleRate } : undefined);
   try {
-    const audioBuffer = await context.decodeAudioData(arrayBuffer.slice(0));
-    return fromAudioBuffer(audioBuffer, {
-      backend: "browser",
-      fileName: file.name,
-      inputBytes: file.size,
-      sourceSampleRate,
-      streamIndex: 0,
-    });
+    return await context.decodeAudioData(arrayBuffer.slice(0));
   } finally {
     if (typeof context.close === "function") await context.close();
   }

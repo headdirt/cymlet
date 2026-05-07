@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { decodeWithBrowser, fromAudioBuffer } from "../src/decoders/browser-decoder.js";
 import { decodeAudioFile, shouldOfferCompatibilityDecoder } from "../src/decoders/index.js";
+import { createSweepFixture, encodeWavPcm16 } from "../src/fixtures.js";
 import {
   decodeWithFfmpeg,
   ffmpegAssetUrls,
@@ -73,6 +74,64 @@ test("browser decoder uses File-like input and closes AudioContext", async () =>
   assert.equal(decoded.inputBytes, 128);
   assert.equal(FakeAudioContext.closed, true);
 });
+
+test("browser decoder prefers OfflineAudioContext when source rate is sniffable", async () => {
+  const constructed = [];
+  class FakeOfflineAudioContext {
+    constructor(channels, length, sampleRate) {
+      constructed.push({ channels, length, sampleRate });
+    }
+    async decodeAudioData() {
+      return fakeAudioBuffer();
+    }
+  }
+  FakeAudioContext.closed = false;
+  let onlineConstructed = false;
+  class TrackingAudioContext extends FakeAudioContext {
+    constructor(...args) {
+      super(...args);
+      onlineConstructed = true;
+    }
+  }
+
+  const decoded = await decodeWithBrowser(makeWavFile(48000), {
+    AudioContextClass: TrackingAudioContext,
+    OfflineAudioContextClass: FakeOfflineAudioContext,
+  });
+
+  assert.equal(constructed.length, 1);
+  assert.equal(constructed[0].sampleRate, 48000);
+  assert.equal(onlineConstructed, false);
+  assert.equal(decoded.sourceSampleRate, 48000);
+});
+
+test("browser decoder falls back to AudioContext when OfflineAudioContext rejects", async () => {
+  class FailingOfflineAudioContext {
+    constructor() {
+      throw new Error("rate out of range");
+    }
+  }
+  FakeAudioContext.closed = false;
+
+  const decoded = await decodeWithBrowser(makeWavFile(96000), {
+    AudioContextClass: FakeAudioContext,
+    OfflineAudioContextClass: FailingOfflineAudioContext,
+  });
+
+  assert.equal(decoded.sourceSampleRate, 96000);
+  assert.equal(FakeAudioContext.closed, true);
+});
+
+function makeWavFile(sampleRate) {
+  const wav = encodeWavPcm16(createSweepFixture({ sampleRate, seconds: 0.05, channels: 1 }));
+  return {
+    name: "fake.wav",
+    size: wav.byteLength,
+    async arrayBuffer() {
+      return wav;
+    },
+  };
+}
 
 test("FFmpeg boundary is present but unavailable until bundled", async () => {
   assert.equal(isFfmpegDecoderAvailable(), false);

@@ -135,16 +135,15 @@ function printReport() {
     console.log(`User agent: ${result.userAgent}`);
     console.log(`Native canPlayType reports: ${result.nativeFormats.join(", ") || "none"}`);
     console.log("");
-    console.log("| Sample | Web Audio | FFmpeg WASM | Details |");
-    console.log("|---|---:|---:|---|");
+    console.log("| Sample | Source Hz | AudioContext Hz | OfflineAudioContext Hz | Δ | FFmpeg Hz |");
+    console.log("|---|---:|---:|---:|:---:|---:|");
     for (const sample of result.samples) {
-      const browserCell = sample.browser.ok ? "yes" : "no";
-      const ffmpegCell = sample.ffmpeg.ok ? "yes" : "no";
-      const details = [
-        sample.browser.ok ? `${sample.browser.sampleRate} Hz, ${sample.browser.channels} ch` : sample.browser.error,
-        sample.ffmpeg.ok ? `ffmpeg ${sample.ffmpeg.sampleRate} Hz, ${sample.ffmpeg.channels} ch` : `ffmpeg ${sample.ffmpeg.error}`,
-      ].join("<br>");
-      console.log(`| ${sample.name} | ${browserCell} | ${ffmpegCell} | ${details.replaceAll("|", "\\|")} |`);
+      const onlineRate = sample.browserOnline.ok ? sample.browserOnline.sampleRate : "—";
+      const offlineRate = sample.browser.ok ? sample.browser.sampleRate : "—";
+      const sourceRate = sample.sourceSampleRate || "—";
+      const ffmpegRate = sample.ffmpeg.ok ? sample.ffmpeg.sampleRate : "—";
+      const moved = sample.browser.ok && sample.browserOnline.ok && sample.browser.sampleRate !== sample.browserOnline.sampleRate ? "yes" : " ";
+      console.log(`| ${sample.name} | ${sourceRate} | ${onlineRate} | ${offlineRate} | ${moved} | ${ffmpegRate} |`);
     }
     console.log("");
   }
@@ -167,7 +166,7 @@ function runnerHtml() {
 <h1>Cymlet codec matrix</h1>
 <p id="status">Starting...</p>
 <table>
-  <thead><tr><th>Sample</th><th>Web Audio</th><th>FFmpeg WASM</th><th>Details</th></tr></thead>
+  <thead><tr><th>Sample</th><th>Source Hz</th><th>AudioContext Hz</th><th>OfflineAudioContext Hz</th><th>FFmpeg WASM Hz</th></tr></thead>
   <tbody id="rows"></tbody>
 </table>
 <script type="module" src="./codec-matrix-runner.js"></script>`;
@@ -194,9 +193,11 @@ for (const sample of CODEC_SAMPLES) {
   const response = await fetch(\`./test/fixtures/codec-samples/\${sample.name}\`);
   const blob = await response.blob();
   const file = new File([blob], sample.name, { type: mimeFor(sample.name) });
+  const browserOnlineResult = await attempt(() => decodeWithBrowser(file, { OfflineAudioContextClass: null }));
   const browserResult = await attempt(() => decodeWithBrowser(file));
   const ffmpegResult = await attempt(() => decodeWithFfmpeg(file));
-  const result = { name: sample.name, expectedMode: sample.expectedMode, browser: browserResult, ffmpeg: ffmpegResult };
+  const sourceSampleRate = browserResult.sourceSampleRate ?? browserOnlineResult.sourceSampleRate ?? null;
+  const result = { name: sample.name, expectedMode: sample.expectedMode, sourceSampleRate, browserOnline: browserOnlineResult, browser: browserResult, ffmpeg: ffmpegResult };
   samples.push(result);
   appendRow(result);
 }
@@ -235,24 +236,19 @@ async function attempt(task) {
 
 function appendRow(sample) {
   const row = document.createElement("tr");
+  const source = sample.sourceSampleRate || "—";
+  const cell = (result) => {
+    if (!result.ok) return \`<td class="fail">\${escapeHtml(result.error)}</td>\`;
+    return \`<td class="ok">\${result.sampleRate}</td>\`;
+  };
   row.innerHTML = \`
     <td>\${sample.name}</td>
-    <td class="\${sample.browser.ok ? "ok" : "fail"}">\${sample.browser.ok ? "yes" : "no"}</td>
-    <td class="\${sample.ffmpeg.ok ? "ok" : "fail"}">\${sample.ffmpeg.ok ? "yes" : "no"}</td>
-    <td>\${details(sample)}</td>
+    <td>\${source}</td>
+    \${cell(sample.browserOnline)}
+    \${cell(sample.browser)}
+    \${cell(sample.ffmpeg)}
   \`;
   rows.append(row);
-}
-
-function details(sample) {
-  const parts = [];
-  parts.push(sample.browser.ok
-    ? \`Browser: \${sample.browser.sampleRate} Hz, \${sample.browser.channels} ch, \${sample.browser.ms} ms\`
-    : \`Browser: \${sample.browser.error}\`);
-  parts.push(sample.ffmpeg.ok
-    ? \`FFmpeg: \${sample.ffmpeg.sampleRate} Hz, \${sample.ffmpeg.channels} ch, \${sample.ffmpeg.ms} ms\`
-    : \`FFmpeg: \${sample.ffmpeg.error}\`);
-  return parts.map(escapeHtml).join("<br>");
 }
 
 function escapeHtml(value) {
