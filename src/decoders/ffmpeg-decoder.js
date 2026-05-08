@@ -4,6 +4,10 @@ import { safePathSegment, stripFileExtension } from "../file-utils.js";
 import { decodeWithBrowser } from "./browser-decoder.js";
 
 const DEFAULT_VENDOR_BASE = new URL("../../vendor/ffmpeg", import.meta.url).href;
+const FFMPEG_CORE_SHA384 = {
+  "ffmpeg-core.js": "f4a9409a01eee700ea76042f16140664eb4a742c0670ca690e133f901914a59e4b4bb286b801db13e360b494047fce22",
+  "ffmpeg-core.wasm": "5355438643d8accdf04c24f8fef8d2a52b0aa86fd48e58d8ad8088e21052274dacbdb0a4c6e0a2e94eaefe97a0e6fa56",
+};
 let ffmpegInstancePromise = null;
 
 export function isFfmpegDecoderAvailable(options = {}) {
@@ -37,7 +41,7 @@ export async function decodeWithFfmpeg(file, options = {}) {
     ]);
     options.onFfmpegProgress?.({ phase: "read", ratio: 1 });
     const wavData = await ffmpeg.readFile(outputName);
-    const wavFile = new File([wavData], `${stripExtension(file.name || "decoded")}.wav`, { type: "audio/wav" });
+    const wavFile = new File([wavData], `${stripFileExtension(safeVirtualName(file.name || "decoded")) || "decoded"}.wav`, { type: "audio/wav" });
     const decoded = await decodeWithBrowser(wavFile, options);
     return {
       ...decoded,
@@ -145,12 +149,38 @@ async function createFfmpegRuntime(options) {
   }
 
   options.onFfmpegProgress?.({ phase: "load", ratio: 0 });
+  const verifiedAssets = await fetchVerifiedFfmpegAssets(options);
   await ffmpeg.load({
-    ...ffmpegAssetUrls(options.vendorBase || DEFAULT_VENDOR_BASE),
+    ...verifiedAssets,
     ...(options.loadConfig || {}),
   });
   options.onFfmpegProgress?.({ phase: "load", ratio: 1 });
   return ffmpeg;
+}
+
+async function fetchVerifiedFfmpegAssets(options) {
+  const sourceUrls = ffmpegAssetUrls(options.vendorBase || DEFAULT_VENDOR_BASE);
+  const [coreURL, wasmURL] = await Promise.all([
+    fetchAndVerify(sourceUrls.coreURL, FFMPEG_CORE_SHA384["ffmpeg-core.js"], "text/javascript"),
+    fetchAndVerify(sourceUrls.wasmURL, FFMPEG_CORE_SHA384["ffmpeg-core.wasm"], "application/wasm"),
+  ]);
+  return { coreURL, wasmURL };
+}
+
+async function fetchAndVerify(url, expectedSha384Hex, mimeType) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not fetch ${url}: ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  const actualHex = await sha384Hex(bytes);
+  if (actualHex !== expectedSha384Hex) {
+    throw new Error(`Integrity check failed for ${url}: expected SHA-384 ${expectedSha384Hex}, got ${actualHex}`);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+async function sha384Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-384", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function importFfmpegClass(options) {
@@ -175,10 +205,6 @@ async function deleteIfPresent(ffmpeg, path) {
 
 function safeVirtualName(name) {
   return safePathSegment(name, "_") || "input.audio";
-}
-
-function stripExtension(name) {
-  return stripFileExtension(safeVirtualName(name)) || "decoded";
 }
 
 function formatStreamLabel(stream, index, count) {

@@ -2,11 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { readAscii } from "../src/file-utils.js";
 import { createSweepFixture, encodeWavPcm16 } from "../src/fixtures.js";
-
-function ascii(view, offset, length) {
-  return String.fromCharCode(...new Uint8Array(view.buffer, offset, length));
-}
 
 test("sweep fixture creates deterministic channel data", () => {
   const fixture = createSweepFixture({ sampleRate: 8000, seconds: 0.5, channels: 2 });
@@ -22,14 +19,14 @@ test("WAV fixture encoder writes a valid PCM header", () => {
   const buffer = encodeWavPcm16(fixture);
   const view = new DataView(buffer);
 
-  assert.equal(ascii(view, 0, 4), "RIFF");
-  assert.equal(ascii(view, 8, 4), "WAVE");
-  assert.equal(ascii(view, 12, 4), "fmt ");
+  assert.equal(readAscii(view, 0, 4), "RIFF");
+  assert.equal(readAscii(view, 8, 4), "WAVE");
+  assert.equal(readAscii(view, 12, 4), "fmt ");
   assert.equal(view.getUint16(20, true), 1);
   assert.equal(view.getUint16(22, true), 2);
   assert.equal(view.getUint32(24, true), 8000);
   assert.equal(view.getUint16(34, true), 16);
-  assert.equal(ascii(view, 36, 4), "data");
+  assert.equal(readAscii(view, 36, 4), "data");
   assert.equal(view.getUint32(40, true), fixture.length * fixture.channels * 2);
   assert.equal(buffer.byteLength, 44 + fixture.length * fixture.channels * 2);
 });

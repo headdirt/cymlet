@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { writeAscii } from "../src/file-utils.js";
 import { createSweepFixture, encodeWavPcm16 } from "../src/fixtures.js";
 import {
   sniffFlacSampleRate,
@@ -76,7 +77,7 @@ test("source-rate chain prefers FLAC over MP3 byte-scan false-positives", () => 
 
 function flacStreamInfo(sampleRate) {
   const bytes = new Uint8Array(42);
-  writeAscii(bytes, 0, "fLaC");
+  writeAscii(new DataView(bytes.buffer), 0, "fLaC");
   bytes[4] = 0x00;
   bytes[5] = 0x00;
   bytes[6] = 0x00;
@@ -89,8 +90,9 @@ function flacStreamInfo(sampleRate) {
 
 function oggVorbisIdentificationPage(sampleRate) {
   const packet = new Uint8Array(30);
+  const packetView = new DataView(packet.buffer);
   packet[0] = 0x01;
-  writeAscii(packet, 1, "vorbis");
+  writeAscii(packetView, 1, "vorbis");
   packet[11] = 2;
   packet[12] = sampleRate & 0xff;
   packet[13] = (sampleRate >> 8) & 0xff;
@@ -98,7 +100,7 @@ function oggVorbisIdentificationPage(sampleRate) {
   packet[15] = (sampleRate >> 24) & 0xff;
 
   const bytes = new Uint8Array(28 + packet.length);
-  writeAscii(bytes, 0, "OggS");
+  writeAscii(new DataView(bytes.buffer), 0, "OggS");
   bytes[4] = 0;
   bytes[5] = 0x02;
   bytes[26] = 1;
@@ -107,8 +109,3 @@ function oggVorbisIdentificationPage(sampleRate) {
   return bytes;
 }
 
-function writeAscii(bytes, offset, text) {
-  for (let i = 0; i < text.length; i++) {
-    bytes[offset + i] = text.charCodeAt(i);
-  }
-}

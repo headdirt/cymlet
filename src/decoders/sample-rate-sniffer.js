@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readAscii } from "../file-utils.js";
+
 const MP3_SAMPLE_RATES = {
   0b11: [44100, 48000, 32000],
   0b10: [22050, 24000, 16000],
@@ -18,11 +20,11 @@ export function sniffSourceSampleRate(arrayBuffer) {
 export function sniffWavSampleRate(arrayBuffer) {
   if (arrayBuffer.byteLength < 28) return null;
   const view = new DataView(arrayBuffer);
-  if (ascii(view, 0, 4) !== "RIFF" || ascii(view, 8, 4) !== "WAVE") return null;
+  if (readAscii(view, 0, 4) !== "RIFF" || readAscii(view, 8, 4) !== "WAVE") return null;
 
   let offset = 12;
   while (offset + 8 <= view.byteLength) {
-    const id = ascii(view, offset, 4);
+    const id = readAscii(view, offset, 4);
     const size = view.getUint32(offset + 4, true);
     const dataOffset = offset + 8;
     if (id === "fmt " && size >= 16 && dataOffset + 16 <= view.byteLength) {
@@ -58,7 +60,7 @@ export function sniffMp3SampleRate(arrayBuffer) {
 export function sniffFlacSampleRate(arrayBuffer) {
   if (arrayBuffer.byteLength < 18) return null;
   const view = new DataView(arrayBuffer);
-  if (ascii(view, 0, 4) !== "fLaC") return null;
+  if (readAscii(view, 0, 4) !== "fLaC") return null;
   const isStreamInfo = (view.getUint8(4) & 0x7f) === 0;
   const blockLength = (view.getUint8(5) << 16) | (view.getUint8(6) << 8) | view.getUint8(7);
   if (!isStreamInfo || blockLength < 34 || 8 + blockLength > view.byteLength) return null;
@@ -71,7 +73,7 @@ export function sniffOggVorbisSampleRate(arrayBuffer) {
   const page = firstOggPagePacket(arrayBuffer);
   if (!page || page.length < 16) return null;
   const view = new DataView(page.buffer, page.byteOffset, page.byteLength);
-  if (view.getUint8(0) !== 0x01 || ascii(view, 1, 6) !== "vorbis") return null;
+  if (view.getUint8(0) !== 0x01 || readAscii(view, 1, 6) !== "vorbis") return null;
   const sampleRate = view.getUint32(12, true);
   return validSampleRate(sampleRate) ? sampleRate : null;
 }
@@ -80,7 +82,7 @@ function firstOggPagePacket(arrayBuffer) {
   if (arrayBuffer.byteLength < 28) return null;
   const bytes = new Uint8Array(arrayBuffer);
   const view = new DataView(arrayBuffer);
-  if (ascii(view, 0, 4) !== "OggS" || view.getUint8(4) !== 0) return null;
+  if (readAscii(view, 0, 4) !== "OggS" || view.getUint8(4) !== 0) return null;
   const segments = view.getUint8(26);
   const segmentTableOffset = 27;
   const dataOffset = segmentTableOffset + segments;
@@ -101,12 +103,4 @@ function firstOggPagePacket(arrayBuffer) {
 
 function validSampleRate(sampleRate) {
   return Number.isInteger(sampleRate) && sampleRate >= 8000 && sampleRate <= 384000;
-}
-
-function ascii(view, offset, length) {
-  let text = "";
-  for (let i = 0; i < length; i++) {
-    text += String.fromCharCode(view.getUint8(offset + i));
-  }
-  return text;
 }

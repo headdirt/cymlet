@@ -6,6 +6,10 @@ This directory holds the single-thread ffmpeg.wasm build. It is loaded only when
 
 The current bundle is `@ffmpeg/ffmpeg@0.12.15` plus `@ffmpeg/core@0.12.10`. A multi-thread build would require `@ffmpeg/core-mt`, an additional core worker file, and cross-origin isolation headers — we deliberately stick with the single-thread bundle so any plain static server works.
 
+## Integrity
+
+`src/decoders/ffmpeg-decoder.js` pins SHA-384 digests for `ffmpeg-core.js` and `ffmpeg-core.wasm` and verifies the bytes before passing them to `ffmpeg.load()`. When bumping the bundle, recompute the digests with `shasum -a 384` and update `FFMPEG_CORE_SHA384` in `ffmpeg-decoder.js`.
+
 ## Licensing
 
 These files are third-party vendored artifacts and retain their upstream licenses and notices. The surrounding Cymlet app is AGPL-3.0-or-later, which does not relicense this bundle.

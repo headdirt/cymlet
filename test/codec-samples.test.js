@@ -33,11 +33,12 @@ test("file picker accepts advertised compatibility extensions without broad medi
   }
 });
 
-test("supported audio extensions match browser and compatibility extension sets", () => {
-  assert.deepEqual(SUPPORTED_AUDIO_EXTENSIONS, [
-    ...BROWSER_EXTENSIONS,
-    ...COMPATIBILITY_EXTENSIONS,
-  ]);
+test("browser and compatibility extension sets are disjoint", () => {
+  const overlap = BROWSER_EXTENSIONS.filter((ext) => COMPATIBILITY_EXTENSIONS.includes(ext));
+  assert.deepEqual(overlap, [], `extensions present in both lists: ${overlap.join(", ")}`);
+  for (const ext of [...BROWSER_EXTENSIONS, ...COMPATIBILITY_EXTENSIONS]) {
+    assert.ok(SUPPORTED_AUDIO_EXTENSIONS.includes(ext), `${ext} missing from SUPPORTED_AUDIO_EXTENSIONS`);
+  }
 });
 
 test("browser sample manifest keeps clear native formats off the compatibility path", () => {

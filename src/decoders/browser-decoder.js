@@ -31,10 +31,12 @@ export async function decodeWithBrowser(file, options = {}) {
 async function decodeAudioBuffer(arrayBuffer, { AudioContextClass, OfflineAudioContextClass, sourceSampleRate }) {
   // OfflineAudioContext's sample rate is decoupled from the device output, so platforms
   // that silently override AudioContext({ sampleRate }) still honor the requested rate here.
+  // The offline path may detach the buffer on failure, so we slice only when a fallback path exists.
   if (OfflineAudioContextClass && sourceSampleRate) {
     try {
       const offline = new OfflineAudioContextClass(1, 1, sourceSampleRate);
-      return await offline.decodeAudioData(arrayBuffer.slice(0));
+      const input = AudioContextClass ? arrayBuffer.slice(0) : arrayBuffer;
+      return await offline.decodeAudioData(input);
     } catch {
       // Fall through to the online AudioContext path.
     }
@@ -44,7 +46,7 @@ async function decodeAudioBuffer(arrayBuffer, { AudioContextClass, OfflineAudioC
   }
   const context = new AudioContextClass(sourceSampleRate ? { sampleRate: sourceSampleRate } : undefined);
   try {
-    return await context.decodeAudioData(arrayBuffer.slice(0));
+    return await context.decodeAudioData(arrayBuffer);
   } finally {
     if (typeof context.close === "function") await context.close();
   }

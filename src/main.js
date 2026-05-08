@@ -16,21 +16,17 @@ import {
   SPECTROGRAM_NON_PLOT_WIDTH,
   STATUS,
   SUPPORTED_AUDIO_EXTENSIONS,
-  SYNTHETIC_SAMPLE_RATE,
   TESTED_SAFARI_EXTRA_FORMATS,
   TESTED_WEB_AUDIO_FORMATS,
 } from "./constants.js";
 import { decodeAudioFile } from "./decoders/index.js";
 import { downloadCanvasPng } from "./export.js";
-import { safePathSegment } from "./file-utils.js";
-import { createFixtureAudioBuffer, createSweepFixture, encodeWavPcm16 } from "./fixtures.js";
 import { decoderLabel, formatBytes, formatList, formatTimeMmSs, labelWindow } from "./format.js";
 import { capColumnsForMatrixBudget, decodedByteSize } from "./memory.js";
 import { makePalette } from "./palette.js";
 import { formatReadout, spectrogramReadoutAtPoint } from "./readout.js";
 import { drawSpectrogram, spectrogramPlot } from "./render.js";
 import { applyStoredControlSettings, loadStoredSettings, saveStoredSettings } from "./settings-store.js";
-import { canvasHasSignal, waitForCondition } from "./smoke.js";
 
 const els = {
   fileInput: document.querySelector("#fileInput"),
@@ -73,7 +69,6 @@ const state = {
   renderBitmap: null,
   renderBitmapKey: "",
   renderBitmapPendingKey: "",
-  renderBitmapVersion: 0,
 };
 
 const ctx = els.canvas.getContext("2d", { alpha: false });
@@ -235,27 +230,31 @@ async function openFile(file, overrides = {}) {
   }
 }
 
-function populateStreams(decoded) {
-  els.streamSelect.innerHTML = "";
-  for (let i = 0; i < decoded.streamCount; i++) {
-    const option = document.createElement("option");
-    option.value = String(i);
-    option.textContent = i === decoded.streamIndex ? decoded.streamLabel : `Stream ${i + 1}`;
-    els.streamSelect.append(option);
-  }
-  els.streamSelect.value = String(decoded.streamIndex);
-  els.streamSelect.disabled = decoded.streamCount <= 1;
-}
-
-function populateChannels(count) {
-  els.channelSelect.innerHTML = "";
+function populateSelect(select, count, { selectedIndex = 0, label, disabledWhen }) {
+  select.innerHTML = "";
   for (let i = 0; i < count; i++) {
     const option = document.createElement("option");
     option.value = String(i);
-    option.textContent = count === 1 ? "Mono" : `Channel ${i + 1}`;
-    els.channelSelect.append(option);
+    option.textContent = label(i);
+    select.append(option);
   }
-  els.channelSelect.disabled = count < 1;
+  select.value = String(selectedIndex);
+  select.disabled = disabledWhen(count);
+}
+
+function populateStreams(decoded) {
+  populateSelect(els.streamSelect, decoded.streamCount, {
+    selectedIndex: decoded.streamIndex,
+    label: (i) => (i === decoded.streamIndex ? decoded.streamLabel : `Stream ${i + 1}`),
+    disabledWhen: (count) => count <= 1,
+  });
+}
+
+function populateChannels(count) {
+  populateSelect(els.channelSelect, count, {
+    label: (i) => (count === 1 ? "Mono" : `Channel ${i + 1}`),
+    disabledWhen: (n) => n < 1,
+  });
 }
 
 function metaText() {
@@ -333,7 +332,7 @@ function analyze() {
 }
 
 function createAnalysisWorker() {
-  const worker = new Worker("./src/analysis-worker.js", { type: "module" });
+  const worker = new Worker(new URL("./analysis-worker.js", import.meta.url), { type: "module" });
   worker.onmessage = handleWorkerMessage;
   worker.onerror = () => {
     state.workerBusy = false;
@@ -384,12 +383,14 @@ function handleWorkerMessage(event) {
 function render({ forceSync = false } = {}) {
   resizeCanvas();
   const s = settings();
-  ctx.fillStyle = "#020306";
-  ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
-  if (!state.matrix || !state.audioBuffer) return;
+  if (!state.matrix || !state.audioBuffer) {
+    ctx.fillStyle = "#020306";
+    ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
+    return;
+  }
   const options = spectrogramRenderOptions(s);
   const key = renderBitmapKey(s);
-  if (!forceSync && state.renderBitmap && state.renderBitmapVersion === state.renderVersion && state.renderBitmapKey === key) {
+  if (!forceSync && state.renderBitmap && state.renderBitmapKey === key) {
     drawSpectrogram(ctx, { ...options, bitmap: state.renderBitmap });
     return;
   }
@@ -435,7 +436,6 @@ function clearRenderBitmap() {
   state.renderBitmap = null;
   state.renderBitmapKey = "";
   state.renderBitmapPendingKey = "";
-  state.renderBitmapVersion = 0;
 }
 
 function canUseRenderWorker() {
@@ -449,7 +449,7 @@ function canUseRenderWorker() {
 function ensureRenderWorker() {
   if (!canUseRenderWorker()) return null;
   if (!state.renderWorker) {
-    state.renderWorker = new Worker("./src/render-bitmap-worker.js", { type: "module" });
+    state.renderWorker = new Worker(new URL("./render-bitmap-worker.js", import.meta.url), { type: "module" });
     state.renderWorker.onmessage = handleRenderWorkerMessage;
     state.renderWorker.onerror = () => {
       state.renderWorker?.terminate();
@@ -506,7 +506,6 @@ function handleRenderWorkerMessage(event) {
   state.renderBitmap = message.bitmap;
   state.renderBitmapKey = message.key;
   state.renderBitmapPendingKey = "";
-  state.renderBitmapVersion = message.version;
   render();
   setStatus(STATUS.analysisComplete);
 }
@@ -709,135 +708,6 @@ window.addEventListener("resize", () => {
   }, 250);
 });
 
-if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-  window.__loadSyntheticSpectrogram = async () => {
-    const sampleRate = SYNTHETIC_SAMPLE_RATE;
-    const seconds = 3;
-    const context = new AudioContext({ sampleRate });
-    const fixture = createSweepFixture({ sampleRate, seconds, channels: 2 });
-    const buffer = createFixtureAudioBuffer(context, fixture);
-    await context.close();
-    const fixtureMeta = {
-      backend: "fixture",
-      fileName: "synthetic-sweep.wav",
-      inputBytes: 0,
-      streamIndex: 0,
-      streamCount: 1,
-      streamLabel: "Synthetic test stream",
-      duration: buffer.duration,
-      sampleRate: buffer.sampleRate,
-      sourceSampleRate: buffer.sampleRate,
-      channelCount: buffer.numberOfChannels,
-      length: buffer.length,
-      getChannelData: (channel) => buffer.getChannelData(channel),
-    };
-    fixtureMeta.decodedBytes = decodedByteSize(fixtureMeta);
-    state.audioBuffer = fixtureMeta;
-    state.fileName = "synthetic-sweep.wav";
-    setWorkspaceHasFile(true);
-    populateStreams(fixtureMeta);
-    populateChannels(fixtureMeta.channelCount);
-    els.fileMeta.textContent = metaText();
-    analyze();
-  };
-
-  window.__loadGeneratedStressFile = async ({ seconds = 120, decoderMode = "browser" } = {}) => {
-    const sampleRate = SYNTHETIC_SAMPLE_RATE;
-    const channels = 2;
-    const fixture = createSweepFixture({ sampleRate, seconds, channels });
-    const wav = encodeWavPcm16(fixture);
-    const file = new File([wav], `generated-${seconds}s-stress.wav`, { type: "audio/wav" });
-    els.decoderModeSelect.value = decoderMode;
-    persistSettings();
-    await openFile(file);
-  };
-
-  window.__loadLocalSample = async (name) => {
-    const safeName = safePathSegment(name);
-    const response = await fetch(`./test/fixtures/codec-samples/${safeName}`);
-    if (!response.ok) {
-      throw new Error(`Could not load local sample ${safeName}: ${response.status}`);
-    }
-    const blob = await response.blob();
-    await openFile(new File([blob], safeName, { type: blob.type || "application/octet-stream" }));
-  };
-
-  window.__runBrowserSampleSuite = async (sampleNames) => {
-    const results = [];
-    for (const sampleName of sampleNames) {
-      try {
-        await window.__loadLocalSample(sampleName);
-        const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
-          timeoutMs: 10000,
-          intervalMs: 50,
-        });
-        render();
-        const png = els.canvas.toDataURL("image/png");
-        results.push({
-          sample: sampleName,
-          complete,
-          nonblank: canvasHasSignal(els.canvas, { minColoredPixels: 1, minBrightness: 12 }),
-          exportPng: complete && png.startsWith("data:image/png") && png.length > 1000,
-          meta: els.fileMeta.textContent,
-          status: els.statusText.textContent,
-        });
-      } catch (error) {
-        results.push({
-          sample: sampleName,
-          complete: false,
-          nonblank: false,
-          exportPng: false,
-          error: error.message || String(error),
-        });
-      }
-    }
-    return {
-      passed: results.every((result) => result.complete && result.nonblank && result.exportPng),
-      results,
-    };
-  };
-
-  window.__spectrogramSmokeTest = async () => {
-    if (!state.matrix) await window.__loadSyntheticSpectrogram();
-    const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
-      timeoutMs: 8000,
-      intervalMs: 50,
-    });
-    render();
-    const png = els.canvas.toDataURL("image/png");
-    return {
-      complete,
-      nonblank: canvasHasSignal(els.canvas),
-      exportPng: png.startsWith("data:image/png") && png.length > 1000,
-      status: els.statusText.textContent,
-      meta: els.fileMeta.textContent,
-      width: els.canvas.width,
-      height: els.canvas.height,
-    };
-  };
-
-  window.__spectrogramStressTest = async ({ seconds = 120, decoderMode = "browser" } = {}) => {
-    await window.__loadGeneratedStressFile({ seconds, decoderMode });
-    const complete = await waitForCondition(() => els.statusText.textContent === STATUS.analysisComplete, {
-      timeoutMs: decoderMode === "ffmpeg" ? 45000 : 20000,
-      intervalMs: 100,
-    });
-    render();
-    const png = els.canvas.toDataURL("image/png");
-    return {
-      complete,
-      nonblank: canvasHasSignal(els.canvas),
-      exportPng: png.startsWith("data:image/png") && png.length > 1000,
-      status: els.statusText.textContent,
-      meta: els.fileMeta.textContent,
-      width: els.canvas.width,
-      height: els.canvas.height,
-      decoderMode,
-      seconds,
-    };
-  };
-}
-
 resizeCanvas();
 
 const params = new URLSearchParams(location.search);
@@ -848,52 +718,19 @@ if (params.get("decoder")) {
   persistSettings();
 }
 
-if (params.get("demo") === "1" && window.__loadSyntheticSpectrogram) {
-  window.__loadSyntheticSpectrogram();
-}
-
-if (params.get("smoke") === "1" && window.__spectrogramSmokeTest) {
-  window.__spectrogramSmokeTest().then((result) => {
-    document.body.dataset.smokeResult = JSON.stringify(result);
-    setStatus(result.complete && result.nonblank && result.exportPng ? "Smoke test passed." : "Smoke test failed.");
-  }).catch((error) => {
-    document.body.dataset.smokeResult = JSON.stringify({ error: error.message || String(error) });
-    setStatus("Smoke test failed.");
-  });
-}
-
-if (params.get("stress") && window.__spectrogramStressTest) {
-  const decoderMode = params.get("stress") === "compatibility" ? "ffmpeg" : "browser";
-  const seconds = Math.max(1, Math.min(900, Number(params.get("seconds") || 120)));
-  window.__spectrogramStressTest({ seconds, decoderMode }).then((result) => {
-    document.body.dataset.stressResult = JSON.stringify(result);
-    setStatus(result.complete && result.nonblank && result.exportPng ? "Stress test passed." : "Stress test failed.");
-  }).catch((error) => {
-    document.body.dataset.stressResult = JSON.stringify({ error: error.message || String(error) });
-    setStatus("Stress test failed.");
-  });
-}
-
-if (params.get("sample") && window.__loadLocalSample) {
-  window.__loadLocalSample(params.get("sample")).catch((error) => {
-    document.body.dataset.sampleError = error.message || String(error);
-    setStatus("Sample load failed.");
-  });
-}
-
-if ((params.get("suite") === "browser" || params.get("suite") === "compatibility") && window.__runBrowserSampleSuite) {
-  import("../test/codec-samples.js").then(({ codecSamplesByMode, codecSamplesForReleaseBrowserSuite }) => {
-    const mode = params.get("suite") === "compatibility" ? "compatibility" : "browser";
-    if (mode === "compatibility") els.decoderModeSelect.value = "ffmpeg";
-    const selectedSamples = mode === "browser" ? codecSamplesForReleaseBrowserSuite() : codecSamplesByMode(mode);
-    const samples = selectedSamples.map((sample) => sample.name);
-    return window.__runBrowserSampleSuite(samples);
-  }).then((result) => {
-    document.body.dataset.suiteResult = JSON.stringify(result);
-    const failures = result.results.filter((item) => !item.complete || !item.nonblank || !item.exportPng || item.error);
-    setStatus(result.passed ? "Fixture suite passed." : `Fixture suite failed: ${failures.map((item) => item.sample).join(", ")}`);
-  }).catch((error) => {
-    document.body.dataset.suiteResult = JSON.stringify({ passed: false, error: error.message || String(error) });
-    setStatus("Fixture suite failed.");
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  import("./dev-harness.js").then(({ installDevHarness }) => {
+    installDevHarness({
+      state,
+      els,
+      setWorkspaceHasFile,
+      populateStreams,
+      populateChannels,
+      metaText,
+      analyze,
+      openFile,
+      render,
+      setStatus,
+    });
   });
 }

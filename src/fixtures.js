@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { writeAscii } from "./file-utils.js";
+
 export function createSweepFixture({ sampleRate = 44100, seconds = 3, channels = 2 } = {}) {
   const length = Math.floor(sampleRate * seconds);
   const channelData = Array.from({ length: channels }, () => new Float32Array(length));
@@ -51,10 +53,4 @@ export function encodeWavPcm16(fixture) {
     }
   }
   return buffer;
-}
-
-function writeAscii(view, offset, text) {
-  for (let i = 0; i < text.length; i++) {
-    view.setUint8(offset + i, text.charCodeAt(i));
-  }
 }

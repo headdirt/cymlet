@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 export function makePalette(name, size = 256) {
-  const colors = new Uint8ClampedArray(size * 3);
+  const colors = new Uint8ClampedArray(size * 4);
   for (let i = 0; i < size; i++) {
     const packed = paletteColor(name, i / (size - 1));
-    const offset = i * 3;
+    const offset = i * 4;
     colors[offset] = (packed >> 16) & 255;
     colors[offset + 1] = (packed >> 8) & 255;
     colors[offset + 2] = packed & 255;
+    colors[offset + 3] = 255;
   }
   return colors;
 }

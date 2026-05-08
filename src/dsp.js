@@ -106,15 +106,8 @@ export function createWindow(name, n) {
 }
 
 export function fftToDb(spectrum, fftSize) {
-  const bands = fftSize / 2 + 1;
-  const values = new Float64Array(bands);
-  const n2 = fftSize * fftSize;
-  for (let i = 0; i < bands; i++) {
-    const re = spectrum.real[i];
-    const im = spectrum.imag[i];
-    const power = i === 0 || i === bands - 1 ? (re * re) / n2 : (re * re + im * im) / n2;
-    values[i] = power > 0 ? 10 * Math.log10(power) : SILENCE_DB;
-  }
+  const values = new Float64Array(fftSize / 2 + 1);
+  accumulateDbFromSpectrum(values, spectrum, fftSize * fftSize);
   return values;
 }
 

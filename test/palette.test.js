@@ -19,12 +19,13 @@ test("spectrum palette clamps out-of-range values", () => {
   assert.equal(paletteColor("spectrum", 2), paletteColor("spectrum", 1));
 });
 
-test("palette table contains RGB triples", () => {
+test("palette table contains RGBA quads with opaque alpha", () => {
   const palette = makePalette("sox", 8);
   assert.ok(palette instanceof Uint8ClampedArray);
-  assert.equal(palette.length, 24);
-  for (const channel of palette) {
-    assert.ok(Number.isInteger(channel));
-    assert.ok(channel >= 0 && channel <= 255);
+  assert.equal(palette.length, 32);
+  for (let i = 0; i < palette.length; i++) {
+    assert.ok(Number.isInteger(palette[i]));
+    assert.ok(palette[i] >= 0 && palette[i] <= 255);
+    if (i % 4 === 3) assert.equal(palette[i], 255);
   }
 });

@@ -114,11 +114,3 @@ export const TESTED_SAFARI_EXTRA_FORMATS = [
   "ALAC/M4A",
   "AC-3",
 ];
-
-export const TESTED_FFMPEG_FORMATS = [
-  "APE",
-  "WavPack",
-  "Musepack",
-  "WMA",
-  "DTS",
-];

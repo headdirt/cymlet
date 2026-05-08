@@ -4,7 +4,6 @@ import { formatTimeMmSs } from "./format.js";
 import { spectrogramImageData } from "./spectrogram-image.js";
 
 let bitmapCanvas = null;
-let spectrogramBitmapCache = null;
 let paletteImageCache = null;
 
 export function spectrogramPlot(width, height) {
@@ -37,7 +36,7 @@ export function drawSpectrogram(ctx, options) {
   const plot = spectrogramPlot(width, height);
   const plotW = plot.width;
   const plotH = plot.height;
-  const bitmap = bitmapOverride || cachedSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette });
+  const bitmap = bitmapOverride || renderSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette });
 
   ctx.fillStyle = "#020306";
   ctx.fillRect(0, 0, width, height);
@@ -57,6 +56,7 @@ export function drawSpectrogram(ctx, options) {
 }
 
 function drawTimeRuler(ctx, duration, x, y, width) {
+  beginTickPainting(ctx);
   const factor = chooseFactor(TIME_TICK_FACTORS, width / Math.max(1, duration), 64);
   drawTick(ctx, x, y, "0:00", "bottom");
   drawTick(ctx, x + width, y, formatTimeMmSs(duration), "bottom");
@@ -69,6 +69,7 @@ function drawTimeRuler(ctx, duration, x, y, width) {
 }
 
 function drawFrequencyRuler(ctx, maxFreq, x, y, height) {
+  beginTickPainting(ctx);
   const factor = chooseFactor(FREQUENCY_TICK_FACTORS, height / Math.max(1, maxFreq), 38);
   drawTick(ctx, x, y + height, "0 kHz", "left");
   drawTick(ctx, x, y, formatFrequencyTick(maxFreq), "left");
@@ -90,31 +91,17 @@ function drawPalette(ctx, x, y, width, height, minDb, maxDb, palette) {
   ctx.putImageData(imageData, x, y);
   ctx.strokeStyle = "#f4f6fb";
   ctx.strokeRect(x, y, width, height);
-  const values = niceDbTicks(minDb, maxDb);
-  for (const value of values) {
+  beginTickPainting(ctx);
+  for (const value of niceDbTicks(minDb, maxDb)) {
     const py = y + height - ((value - minDb) / (maxDb - minDb)) * height;
     drawTick(ctx, x + width, py, `${value} dB`, "right");
   }
 }
 
-function cachedSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette }) {
-  if (
-    spectrogramBitmapCache &&
-    spectrogramBitmapCache.matrix === matrix &&
-    spectrogramBitmapCache.columns === columns &&
-    spectrogramBitmapCache.bands === bands &&
-    spectrogramBitmapCache.minDb === minDb &&
-    spectrogramBitmapCache.maxDb === maxDb &&
-    spectrogramBitmapCache.palette === palette
-  ) {
-    return spectrogramBitmapCache.bitmap;
-  }
-
+function renderSpectrogramBitmap({ matrix, columns, bands, minDb, maxDb, palette }) {
   const imageData = new ImageData(spectrogramImageData({ matrix, columns, bands, minDb, maxDb, palette }), columns, bands);
   const bitmap = getBitmapCanvas(columns, bands);
-  const bitmapCtx = bitmap.getContext("2d");
-  bitmapCtx.putImageData(imageData, 0, 0);
-  spectrogramBitmapCache = { matrix, columns, bands, minDb, maxDb, palette, bitmap };
+  bitmap.getContext("2d").putImageData(imageData, 0, 0);
   return bitmap;
 }
 
@@ -129,15 +116,16 @@ function cachedPaletteImageData(width, height, palette) {
   }
 
   const imageData = new ImageData(width, height);
+  const lastColor = palette.length / 4 - 1;
   for (let row = 0; row < height; row++) {
     const level = 1 - row / Math.max(1, height - 1);
-    const colorIndex = Math.round(level * (palette.length / 3 - 1)) * 3;
+    const colorIndex = Math.round(level * lastColor) * 4;
     for (let col = 0; col < width; col++) {
       const i = (row * width + col) * 4;
       imageData.data[i] = palette[colorIndex];
       imageData.data[i + 1] = palette[colorIndex + 1];
       imageData.data[i + 2] = palette[colorIndex + 2];
-      imageData.data[i + 3] = 255;
+      imageData.data[i + 3] = palette[colorIndex + 3];
     }
   }
   paletteImageCache = { width, height, palette, imageData };
@@ -155,11 +143,14 @@ function getBitmapCanvas(width, height) {
   return bitmapCanvas;
 }
 
-function drawTick(ctx, x, y, label, side) {
+function beginTickPainting(ctx) {
   ctx.strokeStyle = "#f4f6fb";
   ctx.fillStyle = "#d9deea";
   ctx.font = "12px Inter, system-ui, sans-serif";
   ctx.textBaseline = "middle";
+}
+
+function drawTick(ctx, x, y, label, side) {
   if (side === "bottom") {
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -189,13 +180,15 @@ function chooseFactor(factors, scale, labelSize) {
 }
 
 function niceDbTicks(minDb, maxDb) {
-  const ticks = [maxDb, minDb];
   const span = maxDb - minDb;
   const step = span > 80 ? 20 : span > 40 ? 10 : 5;
-  for (let v = Math.ceil(minDb / step) * step; v < maxDb; v += step) {
-    if (v !== minDb && v !== maxDb) ticks.push(v);
+  const ticks = [maxDb];
+  const firstStep = Math.floor(maxDb / step) * step;
+  for (let v = firstStep; v > minDb; v -= step) {
+    if (v < maxDb) ticks.push(v);
   }
-  return ticks.sort((a, b) => b - a);
+  ticks.push(minDb);
+  return ticks;
 }
 
 function drawText(ctx, text, x, y, size, color, weight) {
